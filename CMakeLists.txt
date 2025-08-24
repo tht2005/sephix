@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 project(SEPHIX VERSION 0.1.0)
 
 set(SYSCONF_DIR "/etc/sephix" CACHE STRING "")
+set(SEPHIX_RUNTIME_DIR "/run/sephix" CACHE STRING "")
 
 configure_file(
 	${CMAKE_SOURCE_DIR}/include/sephix_config.h.in
