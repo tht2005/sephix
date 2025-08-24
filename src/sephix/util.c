@@ -1,3 +1,5 @@
+#include "sephix/util.h"
+
 #include <assert.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -21,14 +23,14 @@ unshare_wrapper(int flags)
 {
 	pid_t child_pid;
 	if (unshare(flags)) {
-		perror("unshare");
+		PERROR("unshare");
 		exit(EXIT_FAILURE);
 	}
 	if (flags & CLONE_NEWPID) {
 		child_pid = fork();
 		if (child_pid < 0) {
-			perror("fork");
-			exit(EXIT_FAILURE);
+			PERROR("fork");
+			return -1;
 		}
 		if (child_pid > 0) {
 			wait(NULL);
