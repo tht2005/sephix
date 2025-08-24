@@ -1,0 +1,8 @@
+#ifndef __SEPHIX_CONFIG_H
+#define __SEPHIX_CONFIG_H
+
+#define SEPHIX_VERSION "@SEPHIX_VERSION@"
+
+#define SYSCONF_DIR "@SYSCONF_DIR@"
+
+#endif
