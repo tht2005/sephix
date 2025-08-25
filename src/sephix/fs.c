@@ -77,6 +77,10 @@ fs__prepare_new_root(struct sandbox_t *sandbox)
 		return -1;
 	}
 
+	if (sandbox->clone_flags & CLONE_NEWIPC) {
+		// [TODO] mount mqueue?
+	}
+
 	// [fixme] test bash, in future read config and bind
 	mkdir2(sandbox->runtime_dir, "/mnt/proc", 0755);
 	if (sandbox->clone_flags & CLONE_NEWPID) {
