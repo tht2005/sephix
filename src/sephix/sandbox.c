@@ -185,7 +185,7 @@ sandbox__init(struct sandbox_t *sandbox)
 	pid_t child_pid;
 	int child_status;
 
-	sandbox->clone_flags = CLONE_NEWUSER | CLONE_NEWNS | SIGCHLD;
+	sandbox->clone_flags = CLONE_NEWNS;
 
 	// [TODO]
 	sandbox->clone_flags |= CLONE_NEWPID;
@@ -198,7 +198,7 @@ sandbox__init(struct sandbox_t *sandbox)
 		_EXIT(out, -1);
 	}
 
-	child_pid = clone(sandbox__entry, child_stack + STACK_MAX, sandbox->clone_flags, sandbox);
+	child_pid = clone(sandbox__entry, child_stack + STACK_MAX, sandbox->clone_flags | CLONE_NEWUSER | SIGCHLD, sandbox);
 	prctl(PR_SET_PDEATHSIG, SIGKILL); // after parent die, send SIGKILL to child
 
 	if (setup_userns_mapping(sandbox, child_pid) < 0) {
