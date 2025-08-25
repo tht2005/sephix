@@ -33,6 +33,11 @@ sandbox__entry(void *arg)
 		return -1;
 	}
 
+	if (net__init(sandbox) < 0) {
+		LOG_ERROR("net__init: error");
+		return -1;
+	}
+
 	if (fs__prepare_new_root(sandbox) < 0) {
 		LOG_ERROR("fs__prepare_new_root: error");
 		return -1;
@@ -198,6 +203,9 @@ sandbox__init(struct sandbox_t *sandbox)
 
 	// [TODO]
 	sandbox->clone_flags |= CLONE_NEWIPC;
+
+	// [TODO]
+	sandbox->clone_flags |= CLONE_NEWNET;
 
 	if (fs__create_public_metadata(sandbox) < 0) {
 		LOG_ERROR("fs__create_public_metadata: error");

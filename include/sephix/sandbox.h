@@ -20,14 +20,17 @@ struct sandbox_t {
 };
 
 int
+uts__init(struct sandbox_t *sandbox);
+
+int
+net__init(struct sandbox_t *sandbox);
+
+int
 fs__prepare_new_root(struct sandbox_t *sandbox);
 int
 fs__create_public_metadata (struct sandbox_t *sandbox);
 int
 fs__chroot(struct sandbox_t *sandbox);
-
-int
-uts__init(struct sandbox_t *sandbox);
 
 int
 sandbox__init(struct sandbox_t *sandbox);
