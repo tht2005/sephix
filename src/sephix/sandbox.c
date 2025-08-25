@@ -16,8 +16,14 @@
 int
 sandbox__entry(void *arg)
 {
+	int sig;
+	pid_t child_pid;
+	int child_status;
+
 	struct sandbox_t *sandbox = (struct sandbox_t *) arg;
+
 	sleep(2);
+
 	printf("Inside new user namespace, uid=%d, gid=%d\n", getuid(), getgid());
 
 	printf ("[DEBUG] %s\n", sandbox->exec_argv[0]);
@@ -32,16 +38,42 @@ sandbox__entry(void *arg)
 	}
 
 	if ((sandbox->clone_flags & CLONE_NEWUSER) == 0) {
-		// return to previous user namespace
+		// [TODO] return to previous user namespace
 	}
 
-	if (execv(*sandbox->exec_argv, sandbox->exec_argv) < 0) {
-		PERROR("execv");
+	child_pid = fork();
+	if (child_pid < 0) {
+		PERROR("fork");
 		return -1;
 	}
 
-	// this should not return unless error
-	assert(0);
+	if (child_pid == 0) {
+		if (execv(*sandbox->exec_argv, sandbox->exec_argv) < 0) {
+			PERROR("execv");
+			return -1;
+		}
+		// this should not return unless error
+		assert(0);
+	}
+	else {
+		if (waitpid(child_pid, &child_status, 0) < 0) {
+			PERROR("waitpid");
+			return -1;
+		}
+		if (WIFEXITED(child_status)) {
+			return WEXITSTATUS(child_status);
+		}
+		else if (WIFSIGNALED(child_status)) {
+			sig = WTERMSIG(child_status);
+			signal(sig, SIG_DFL);
+			kill(getpid(), sig);
+		}
+		else {
+			// weird case
+			return 69;
+		}
+	}
+	return 0;
 }
 
 int
@@ -149,6 +181,9 @@ sandbox__init(struct sandbox_t *sandbox)
 	int child_status;
 
 	sandbox->clone_flags = CLONE_NEWUSER | CLONE_NEWNS | SIGCHLD;
+
+	// [TODO]
+	sandbox->clone_flags |= CLONE_NEWPID;
 
 	if (fs__create_public_metadata(sandbox) < 0) {
 		LOG_ERROR("fs__create_public_metadata: error");
