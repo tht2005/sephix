@@ -28,6 +28,11 @@ sandbox__entry(void *arg)
 
 	printf ("[DEBUG] %s\n", sandbox->exec_argv[0]);
 
+	if (uts__init(sandbox) < 0) {
+		LOG_ERROR("uts__init: error");
+		return -1;
+	}
+
 	if (fs__prepare_new_root(sandbox) < 0) {
 		LOG_ERROR("fs__prepare_new_root: error");
 		return -1;
@@ -184,6 +189,9 @@ sandbox__init(struct sandbox_t *sandbox)
 
 	// [TODO]
 	sandbox->clone_flags |= CLONE_NEWPID;
+
+	// [TODO]
+	sandbox->clone_flags |= CLONE_NEWUTS;
 
 	if (fs__create_public_metadata(sandbox) < 0) {
 		LOG_ERROR("fs__create_public_metadata: error");
