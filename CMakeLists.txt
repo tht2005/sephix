@@ -18,5 +18,5 @@ target_include_directories(sephix
 	PRIVATE ${CMAKE_BINARY_DIR}/include
 )
 target_compile_definitions(sephix
-	PRIVATE _GNU_SOURCE _XOPEN_SOURCE
+	PRIVATE _GNU_SOURCE _XOPEN_SOURCE _DEFAULT_SOURCE
 )
