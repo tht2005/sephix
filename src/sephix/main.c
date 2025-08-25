@@ -1,6 +1,6 @@
 #include "sephix/config.h"
-#include "sephix/util.h"
 #include "sephix/sandbox.h"
+#include "sephix/util.h"
 #include "sephix_config.h"
 
 #include <fcntl.h>
@@ -174,14 +174,14 @@ exec:
 			PERROR("strdup");
 			_ERR_EXIT(out);
 		}
-		printf ("[DEBUG] root: runtime_dir = %s\n", runtime_dir);
-	}
-	else {
-		if (asprintf(&runtime_dir, "/run/user/%d/sephix", getuid()) < 0) {
+		printf("[DEBUG] root: runtime_dir = %s\n", runtime_dir);
+	} else {
+		if (asprintf(&runtime_dir, "/run/user/%d/sephix", getuid()) <
+		    0) {
 			PERROR("asprintf");
 			_ERR_EXIT(out);
 		}
-		printf ("[DEBUG] user: runtime_dir = %s\n", runtime_dir);
+		printf("[DEBUG] user: runtime_dir = %s\n", runtime_dir);
 	}
 
 	struct sandbox_t sandbox = {
@@ -200,9 +200,7 @@ exec:
 	}
 
 out:
-	if (runtime_dir)
-		free(runtime_dir);
-	if (exec_argv)
-		free (exec_argv);
+	if (runtime_dir) free(runtime_dir);
+	if (exec_argv) free(exec_argv);
 	return exit_code;
 }

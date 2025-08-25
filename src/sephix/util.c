@@ -101,7 +101,10 @@ chdir2(const char *path_prefix, const char *path_suffix)
 }
 
 int
-mknod2(const char *path_prefix, const char *path_suffix, __mode_t mode, __dev_t dev)
+mknod2(const char *path_prefix,
+       const char *path_suffix,
+       __mode_t mode,
+       __dev_t dev)
 {
 	int status;
 	char *path;

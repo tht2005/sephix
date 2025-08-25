@@ -1,17 +1,17 @@
 #include "sephix/sandbox.h"
 #include "sephix/util.h"
 
-#include <linux/prctl.h>
-#include <sys/prctl.h>
 #include <assert.h>
-#include <stdio.h>
 #include <fcntl.h>
+#include <linux/prctl.h>
 #include <sched.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/prctl.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <stdlib.h>
-#include <signal.h>
 
 int
 sandbox__entry(void *arg)
@@ -20,13 +20,14 @@ sandbox__entry(void *arg)
 	pid_t child_pid;
 	int child_status;
 
-	struct sandbox_t *sandbox = (struct sandbox_t *) arg;
+	struct sandbox_t *sandbox = (struct sandbox_t *)arg;
 
 	sleep(2);
 
-	printf("Inside new user namespace, uid=%d, gid=%d\n", getuid(), getgid());
+	printf("Inside new user namespace, uid=%d, gid=%d\n", getuid(),
+	       getgid());
 
-	printf ("[DEBUG] %s\n", sandbox->exec_argv[0]);
+	printf("[DEBUG] %s\n", sandbox->exec_argv[0]);
 
 	if (uts__init(sandbox) < 0) {
 		LOG_ERROR("uts__init: error");
@@ -64,21 +65,18 @@ sandbox__entry(void *arg)
 		}
 		// this should not return unless error
 		assert(0);
-	}
-	else {
+	} else {
 		if (waitpid(child_pid, &child_status, 0) < 0) {
 			PERROR("waitpid");
 			return -1;
 		}
 		if (WIFEXITED(child_status)) {
 			return WEXITSTATUS(child_status);
-		}
-		else if (WIFSIGNALED(child_status)) {
+		} else if (WIFSIGNALED(child_status)) {
 			sig = WTERMSIG(child_status);
 			signal(sig, SIG_DFL);
 			kill(getpid(), sig);
-		}
-		else {
+		} else {
 			// weird case
 			return 69;
 		}
@@ -94,8 +92,8 @@ write_map(pid_t pid, const char *map, const char *map_file)
 
 	if (asprintf(&path, "/proc/%ld/%s", (long)pid, map_file) < 0) {
 		_EXIT(out, -1);
-	} 
-	int fd = open(path, O_WRONLY); 
+	}
+	int fd = open(path, O_WRONLY);
 	if (fd < 0) {
 		_EXIT(out, -1);
 	}
@@ -104,10 +102,8 @@ write_map(pid_t pid, const char *map, const char *map_file)
 	}
 
 out:
-	if (fd >= 0)
-		close(fd);
-	if (path)
-		free(path);
+	if (fd >= 0) close(fd);
+	if (path) free(path);
 	return exit_code;
 }
 
@@ -125,11 +121,12 @@ write_gid_map(pid_t pid, const char *map)
 	int fd;
 	int exit_code = 0;
 
-	if (snprintf(setgroups_path, SETGROUPS_PATH_MAX, "/proc/%ld/setgroups", (long)pid) < 0) {
+	if (snprintf(setgroups_path, SETGROUPS_PATH_MAX, "/proc/%ld/setgroups",
+		     (long)pid) < 0) {
 		PERROR("snprintf");
 		_EXIT(out, -1);
 	}
-	fd = open(setgroups_path, O_WRONLY); 
+	fd = open(setgroups_path, O_WRONLY);
 	if (fd < 0) {
 		PERROR("open");
 		_EXIT(out, -1);
@@ -140,8 +137,7 @@ write_gid_map(pid_t pid, const char *map)
 	}
 
 out:
-	if (fd >= 0)
-		close(fd);
+	if (fd >= 0) close(fd);
 	return (exit_code == 0) ? write_map(pid, map, "gid_map") : exit_code;
 }
 
@@ -174,8 +170,7 @@ setup_userns_mapping(struct sandbox_t *sandbox, int child_pid)
 	map = NULL;
 
 out:
-	if (map)
-		free(map);
+	if (map) free(map);
 	return exit_code;
 }
 
@@ -212,8 +207,11 @@ sandbox__init(struct sandbox_t *sandbox)
 		_EXIT(out, -1);
 	}
 
-	child_pid = clone(sandbox__entry, child_stack + STACK_MAX, sandbox->clone_flags | CLONE_NEWUSER | SIGCHLD, sandbox);
-	prctl(PR_SET_PDEATHSIG, SIGKILL); // after parent die, send SIGKILL to child
+	child_pid =
+		clone(sandbox__entry, child_stack + STACK_MAX,
+		      sandbox->clone_flags | CLONE_NEWUSER | SIGCHLD, sandbox);
+	prctl(PR_SET_PDEATHSIG,
+	      SIGKILL);	 // after parent die, send SIGKILL to child
 
 	if (setup_userns_mapping(sandbox, child_pid) < 0) {
 		LOG_ERROR("setup_userns_mapping: error");
@@ -226,10 +224,11 @@ sandbox__init(struct sandbox_t *sandbox)
 	}
 
 	if (WIFEXITED(child_status)) {
-		fprintf(stderr, "Child exited with code %d\n", WEXITSTATUS(child_status));
-	}
-	else if (WIFSIGNALED(child_status)) {
-		fprintf(stderr, "Child killed with signal %d\n", WTERMSIG(child_status)); 
+		fprintf(stderr, "Child exited with code %d\n",
+			WEXITSTATUS(child_status));
+	} else if (WIFSIGNALED(child_status)) {
+		fprintf(stderr, "Child killed with signal %d\n",
+			WTERMSIG(child_status));
 	}
 
 out:

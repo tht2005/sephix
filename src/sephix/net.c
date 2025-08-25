@@ -3,19 +3,19 @@
 
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
+#include <net/if.h>
 #include <sched.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <net/if.h>
 #include <unistd.h>
 
 int
 netlink_send(int fd, struct nlmsghdr *nh)
 {
-	struct sockaddr_nl addr = { .nl_family = AF_NETLINK };
-	struct iovec iov = { nh, nh->nlmsg_len };
-	struct msghdr msg = { &addr, sizeof(addr), &iov, 1, NULL, 0, 0 };
+	struct sockaddr_nl addr = {.nl_family = AF_NETLINK};
+	struct iovec iov = {nh, nh->nlmsg_len};
+	struct msghdr msg = {&addr, sizeof(addr), &iov, 1, NULL, 0, 0};
 	return sendmsg(fd, &msg, 0);
 }
 
@@ -71,8 +71,7 @@ setup_net_interface(char *interface)
 	fprintf(stderr, "[DEBUG] Device %s is up!\n", interface);
 
 out:
-	if (fd > 0)
-		close(fd);
+	if (fd > 0) close(fd);
 	return exit_code;
 }
 

@@ -5,8 +5,10 @@
 #include <string.h>
 #include <sys/mount.h>
 
-#define LOG_ERROR(fmt, ...) log_error(__FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)
-void log_error(const char *file, int line, const char *func, const char *fmt, ...);
+#define LOG_ERROR(fmt, ...) \
+	log_error(__FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)
+void
+log_error(const char *file, int line, const char *func, const char *fmt, ...);
 #define PERROR(str) LOG_ERROR("%s: %s", str, strerror(errno))
 
 #define _EXIT(_out, _code)         \
@@ -54,6 +56,9 @@ mount2(const char *special_file,
 int
 chdir2(const char *path_prefix, const char *path_suffix);
 int
-mknod2(const char *path_prefix, const char *path_suffix, __mode_t mode, __dev_t dev);
+mknod2(const char *path_prefix,
+       const char *path_suffix,
+       __mode_t mode,
+       __dev_t dev);
 
 #endif

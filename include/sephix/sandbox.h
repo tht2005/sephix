@@ -28,7 +28,7 @@ net__init(struct sandbox_t *sandbox);
 int
 fs__prepare_new_root(struct sandbox_t *sandbox);
 int
-fs__create_public_metadata (struct sandbox_t *sandbox);
+fs__create_public_metadata(struct sandbox_t *sandbox);
 int
 fs__chroot(struct sandbox_t *sandbox);
 
