@@ -5,6 +5,4 @@
 
 #define SYSCONF_DIR "@SYSCONF_DIR@"
 
-#define SEPHIX_RUNTIME_DIR "@SEPHIX_RUNTIME_DIR@"
-
 #endif

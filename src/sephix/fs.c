@@ -1,4 +1,3 @@
-#include "sephix_config.h"
 #include "sephix/sandbox.h"
 #include "sephix/util.h"
 #include "syscall_wrappers.h"
@@ -21,33 +20,38 @@
 #define PERM_RWX_RX_RX_STRING "0755"
 
 int
-fs__create_metadata_interface()
+fs__create_public_metadata (struct sandbox_t *sandbox)
 {
-	int exit_code = EXIT_SUCCESS;
+	int exit_code = 0;
 	int fd;
-	pid_t pid;
 	char *filename = NULL;
 
-	if (mkdir(SEPHIX_RUNTIME_DIR "/profile", PERM_RWX_RX_RX) && errno != EEXIST) {
+	printf ("[DEBUG] runtime_dir = %s\n", sandbox->runtime_dir);
+	// ensure runtime dir exists
+	if (mkdir(sandbox->runtime_dir, PERM_RWX_RX_RX) && errno != EEXIST) {
 		PERROR("mkdir");
-		_ERR_EXIT(out);
+		_EXIT(out, -1);
 	}
-	pid = getpid();
-	if (asprintf(&filename, SEPHIX_RUNTIME_DIR "/profile/%d", pid) < 0) {
-		LOG_ERROR("asprintf failed");
-		_ERR_EXIT(out);
+
+	if (mkdir2(sandbox->runtime_dir, "/profile", PERM_RWX_RX_RX) && errno != EEXIST) {
+		PERROR("mkdir");
+		_EXIT(out, -1);
+	}
+	if (asprintf(&filename, "%s/profile/%d", sandbox->runtime_dir, sandbox->pid) < 0) {
+		PERROR("asprintf");
+		_EXIT(out, -1);
 	}
 	fprintf(stderr, "[DEBUG] filename=%s\n", filename);
 	fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC, PERM_RW_R_R);
 	if (fd < 0) {
 		PERROR("open");
-		_ERR_EXIT(out);
+		_EXIT(out, -1);
 	}
 	const char *profile_name = "bash\n";  // temporary
 	size_t len = strlen(profile_name);
 	if (write(fd, profile_name, len) != len) {
 		PERROR("write");
-		_ERR_EXIT(out);
+		_EXIT(out, -1);
 	}
 out:
 	if (filename) free(filename);
@@ -55,80 +59,76 @@ out:
 }
 
 int
-fs__init()
+fs__prepare_new_root(struct sandbox_t *sandbox)
 {
-	if (mkdir(SEPHIX_RUNTIME_DIR, PERM_RWX_RX_RX) && errno != EEXIST) {
+	if (mkdir2(sandbox->runtime_dir, "/mnt", PERM_RWX_RX_RX) && errno != EEXIST) {
 		PERROR("mkdir");
 		return -1;
 	}
 
-	if (fs__create_metadata_interface()) {
-		LOG_ERROR("fs__create_metadata_interface failed");
-		return -1;
-	}
-
-	unshare_wrapper(CLONE_NEWNS | CLONE_FILES);
-
-	if (mkdir(SEPHIX_RUNTIME_DIR "/mnt", PERM_RWX_RX_RX) && errno != EEXIST) {
-		PERROR("mkdir");
-		return -1;
-	}
-
-	if (mount(NULL, SEPHIX_RUNTIME_DIR "/mnt", "tmpfs", MS_NOSUID,
+	if (mount2(NULL, sandbox->runtime_dir, "/mnt", "tmpfs", MS_NOSUID,
 		  "mode=755")) {
 		PERROR("mount tmpfs");
 		return -1;
 	}
-	if (mount(NULL, SEPHIX_RUNTIME_DIR "/mnt", NULL, MS_PRIVATE | MS_REC,
+	if (mount2(NULL, sandbox->runtime_dir, "/mnt", NULL, MS_PRIVATE | MS_REC,
 		  NULL)) {
 		PERROR("mount private");
 		return -1;
 	}
 
 	// [fixme] test bash, in future read config and bind
-	mkdir(SEPHIX_RUNTIME_DIR "/mnt/proc", 0755);
-	mount("proc", SEPHIX_RUNTIME_DIR "/mnt/proc", "proc", 0, NULL);
+	mkdir2(sandbox->runtime_dir, "/mnt/proc", 0755);
+	if (sandbox->clone_flags & CLONE_NEWPID) {
+		mount2("proc", sandbox->runtime_dir, "/mnt/proc", "proc", 0, NULL);
+	}
+	else {
+		mount2("/proc", sandbox->runtime_dir, "/mnt/proc", NULL, MS_BIND | MS_REC, NULL);
+	}
 
-	mkdir(SEPHIX_RUNTIME_DIR "/mnt/dev", 0755);
-	mount("tmpfs", SEPHIX_RUNTIME_DIR "/mnt/dev", "tmpfs",
-	      MS_NOSUID | MS_STRICTATIME, "mode=755");
-	mknod(SEPHIX_RUNTIME_DIR "/mnt/dev/null", S_IFCHR | 0666,
-	      makedev(1, 3));
-	mknod(SEPHIX_RUNTIME_DIR "/mnt/dev/zero", S_IFCHR | 0666,
-	      makedev(1, 5));
-	mknod(SEPHIX_RUNTIME_DIR "/mnt/dev/tty", S_IFCHR | 0666, makedev(5, 0));
-	mknod(SEPHIX_RUNTIME_DIR "/mnt/dev/random", S_IFCHR | 0666,
-	      makedev(1, 8));
+	mkdir2(sandbox->runtime_dir, "/mnt/dev", 0755);
+	mount2("/dev", sandbox->runtime_dir, "/mnt/dev", NULL, MS_BIND | MS_REC, NULL);
 
-	mkdir(SEPHIX_RUNTIME_DIR "/mnt/usr", 0755);
-	mount("/usr", SEPHIX_RUNTIME_DIR "/mnt/usr", NULL, MS_BIND | MS_REC,
+	mkdir2(sandbox->runtime_dir, "/mnt/usr", 0755);
+	mount2("/usr", sandbox->runtime_dir, "/mnt/usr", NULL, MS_BIND | MS_REC,
 	      NULL);
 
-	mkdir(SEPHIX_RUNTIME_DIR "/mnt/bin", 0755);
-	mount("/bin", SEPHIX_RUNTIME_DIR "/mnt/bin", NULL, MS_BIND | MS_REC,
+	mkdir2(sandbox->runtime_dir, "/mnt/home", 0755);
+	mount2("/home", sandbox->runtime_dir, "/mnt/home", NULL, MS_BIND | MS_REC,
 	      NULL);
 
-	mkdir(SEPHIX_RUNTIME_DIR "/mnt/opt", 0755);
-	mount("/opt", SEPHIX_RUNTIME_DIR "/mnt/opt", NULL, MS_BIND | MS_REC,
+	mkdir2(sandbox->runtime_dir, "/mnt/bin", 0755);
+	mount2("/bin", sandbox->runtime_dir, "/mnt/bin", NULL, MS_BIND | MS_REC,
 	      NULL);
 
-	mkdir(SEPHIX_RUNTIME_DIR "/mnt/etc", 0755);
-	mount("/etc", SEPHIX_RUNTIME_DIR "/mnt/etc", NULL, MS_BIND | MS_REC,
+	mkdir2(sandbox->runtime_dir, "/mnt/opt", 0755);
+	mount2("/opt", sandbox->runtime_dir, "/mnt/opt", NULL, MS_BIND | MS_REC,
 	      NULL);
 
-	mkdir(SEPHIX_RUNTIME_DIR "/mnt/lib", 0755);
-	mkdir(SEPHIX_RUNTIME_DIR "/mnt/lib64", 0755);
-	mount("/lib", SEPHIX_RUNTIME_DIR "/mnt/lib", NULL, MS_BIND | MS_REC,
-	      NULL);
-	mount("/lib64", SEPHIX_RUNTIME_DIR "/mnt/lib64", NULL, MS_BIND | MS_REC,
+	mkdir2(sandbox->runtime_dir, "/mnt/etc", 0755);
+	mount2("/etc", sandbox->runtime_dir, "/mnt/etc", NULL, MS_BIND | MS_REC,
 	      NULL);
 
+	mkdir2(sandbox->runtime_dir, "/mnt/lib", 0755);
+	mkdir2(sandbox->runtime_dir, "/mnt/lib64", 0755);
+	mount2("/lib", sandbox->runtime_dir, "/mnt/lib", NULL, MS_BIND | MS_REC, NULL);
+	mount2("/lib64", sandbox->runtime_dir, "/mnt/lib64", NULL, MS_BIND | MS_REC, NULL);
+
+	return 0;
+}
+
+int
+fs__chroot(struct sandbox_t *sandbox)
+{
 	// Move to sandboxed file system
-	if (mkdir(SEPHIX_RUNTIME_DIR "/mnt/.old_root", 0755)) {
+	if (mkdir2(sandbox->runtime_dir, "/mnt/.old_root", 0755)) {
 		PERROR("mkdir");
 		return -1;
 	}
-	chdir(SEPHIX_RUNTIME_DIR "/mnt");
+	if (chdir2(sandbox->runtime_dir, "/mnt") < 0) {
+		PERROR("chdir");
+		return -1;
+	}
 	if (pivot_root(".", ".old_root")) {
 		PERROR("pivot_root");
 		return -1;

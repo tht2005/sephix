@@ -1,11 +1,18 @@
 #include "sephix/util.h"
 
 #include <assert.h>
-#include <stdarg.h>
-#include <stdlib.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <sched.h>
+#include <stdarg.h>
+#include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mount.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 void
 log_error(const char *file, int line, const char *func, const char *fmt, ...)
@@ -19,24 +26,93 @@ log_error(const char *file, int line, const char *func, const char *fmt, ...)
 }
 
 int
-unshare_wrapper(int flags)
+file_write(const char *file, const char *fmt, ...)
 {
-	pid_t child_pid;
-	if (unshare(flags)) {
-		PERROR("unshare");
-		exit(EXIT_FAILURE);
+	int fd;
+	va_list arg;
+	int status;
+
+	fd = open(file, O_WRONLY);
+	if (fd < 0) {
+		// errno is set
+		return -1;
 	}
-	if (flags & CLONE_NEWPID) {
-		child_pid = fork();
-		if (child_pid < 0) {
-			PERROR("fork");
-			return -1;
-		}
-		if (child_pid > 0) {
-			wait(NULL);
-			exit(EXIT_SUCCESS);
-		}
+	va_start(arg, fmt);
+	status = vdprintf(fd, fmt, arg);
+	va_end(arg);
+	close(fd);
+	return status;
+}
+
+int
+mkdir2(const char *prefix, const char *suffix, __mode_t mode)
+{
+	int status;
+	char *path;
+
+	assert(prefix);
+	assert(suffix);
+
+	if (asprintf(&path, "%s%s", prefix, suffix) < 0) {
+		return -1;
 	}
-	// child continues
-	return 0;
+	status = mkdir(path, mode);
+	free(path);
+	return status;
+}
+
+int
+mount2(const char *special_file,
+       const char *dir_prefix,
+       const char *dir_suffix,
+       const char *fstype,
+       unsigned long rwflag,
+       const void *data)
+{
+	int status;
+	char *dir;
+
+	assert(dir_prefix);
+	assert(dir_suffix);
+
+	if (asprintf(&dir, "%s%s", dir_prefix, dir_suffix) < 0) {
+		return -1;
+	}
+	status = mount(special_file, dir, fstype, rwflag, data);
+	free(dir);
+	return status;
+}
+
+int
+chdir2(const char *path_prefix, const char *path_suffix)
+{
+	int status;
+	char *path;
+
+	assert(path_prefix);
+	assert(path_suffix);
+
+	if (asprintf(&path, "%s%s", path_prefix, path_suffix) < 0) {
+		return -1;
+	}
+	status = chdir(path);
+	free(path);
+	return status;
+}
+
+int
+mknod2(const char *path_prefix, const char *path_suffix, __mode_t mode, __dev_t dev)
+{
+	int status;
+	char *path;
+
+	assert(path_prefix);
+	assert(path_suffix);
+
+	if (asprintf(&path, "%s%s", path_prefix, path_suffix) < 0) {
+		return -1;
+	}
+	status = mknod(path, mode, dev);
+	free(path);
+	return status;
 }

@@ -3,9 +3,11 @@
 #include "sephix/sandbox.h"
 #include "sephix_config.h"
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -71,14 +73,16 @@ main(int argc, char **argv)
 	int exit_code = EXIT_SUCCESS;
 	int i, j;
 
-	char *profile_name = NULL;
-	char *profile_filename = NULL;
+	const char *profile_name = NULL;
+	const char *profile_filename = NULL;
 
 	int exec_argc = 0;
 	char **exec_argv = NULL;
 
 	pid_t child_pid;
 	int status;
+
+	char *runtime_dir = NULL;
 
 	fprintf(stderr, "[DEBUG] max-arg-count = %d\n", max_arg_count);
 	fprintf(stderr, "[DEBUG] max-arg-len= %d\n", max_arg_len);
@@ -164,41 +168,41 @@ exec:
 		printf("[DEBUG] exec_argv[%d] = '%s'\n", i, exec_argv[i]);
 	}
 
-	if (sandbox__init()) {
+	if (getuid() == 0) {
+		runtime_dir = strdup("/run/sephix");
+		if (!runtime_dir) {
+			PERROR("strdup");
+			_ERR_EXIT(out);
+		}
+		printf ("[DEBUG] root: runtime_dir = %s\n", runtime_dir);
+	}
+	else {
+		if (asprintf(&runtime_dir, "/run/user/%d/sephix", getuid()) < 0) {
+			PERROR("asprintf");
+			_ERR_EXIT(out);
+		}
+		printf ("[DEBUG] user: runtime_dir = %s\n", runtime_dir);
+	}
+
+	struct sandbox_t sandbox = {
+		.pid = getpid(),
+		.gid = getgid(),
+		.uid = getuid(),
+		.name = NULL,
+		.runtime_dir = runtime_dir,
+		.exec_argc = exec_argc,
+		.exec_argv = exec_argv,
+	};
+
+	if (sandbox__init(&sandbox)) {
 		LOG_ERROR("sandbox__init failed");
 		_ERR_EXIT(out);
 	}
 
-	// drop privilege
-
-	child_pid = fork();
-	if (child_pid < 0) {
-		PERROR("fork");
-		_ERR_EXIT(out);
-	}
-
-	if (child_pid == 0) {
-		execv(*exec_argv, exec_argv);
-		// return only if error
-		PERROR("execv");
-		_ERR_EXIT(out);
-	}
-	else {
-		if (waitpid(child_pid, &status, 0) < 0) {
-			PERROR("waitpid");
-		}
-		else {
-			if (WIFEXITED(status)) {
-				printf("Sandboxed process exited with code %d\n", WEXITSTATUS(status));
-			}
-			else if (WIFSIGNALED(status)) {
-				printf("Sandboxed process exited with signal %d\n", WTERMSIG(status));
-			}
-		}
-
-	}
-
 out:
-	if (exec_argv) free(exec_argv);
+	if (runtime_dir)
+		free(runtime_dir);
+	if (exec_argv)
+		free (exec_argv);
 	return exit_code;
 }
