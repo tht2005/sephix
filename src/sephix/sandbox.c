@@ -188,6 +188,9 @@ sandbox__init(struct sandbox_t *sandbox)
 	sandbox->clone_flags = CLONE_NEWNS;
 
 	// [TODO]
+	// sandbox->clone_flags |= CLONE_NEWUSER;
+
+	// [TODO]
 	sandbox->clone_flags |= CLONE_NEWPID;
 
 	// [TODO]
