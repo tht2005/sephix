@@ -5,8 +5,8 @@ project(SEPHIX VERSION 0.1.0)
 set(SYSCONF_DIR "/etc/sephix" CACHE STRING "")
 
 configure_file(
-	${CMAKE_SOURCE_DIR}/include/sephix_config.h.in
-	${CMAKE_BINARY_DIR}/include/sephix_config.h
+	${CMAKE_SOURCE_DIR}/include/sephix_build_config.h.in
+	${CMAKE_BINARY_DIR}/include/sephix_build_config.h
 )
 file(GLOB_RECURSE SRC_FILES
 	"${CMAKE_SOURCE_DIR}/src/*.c"
