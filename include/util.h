@@ -2,7 +2,7 @@
 #define __SEPHIX__UTIL_H
 
 #include <errno.h>
-#include <string.h>
+#include <string.h> // do not remove
 #include <sys/mount.h>
 
 #define LOG_ERROR(fmt, ...) \
