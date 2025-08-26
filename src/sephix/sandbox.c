@@ -9,14 +9,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/prctl.h>
 #include <sys/mman.h>
+#include <sys/prctl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #define STACK_SIZE ((1 << 20) + (1 << 12))
 
-static int pipe_fd[2]; // parent-child sync
+static int pipe_fd[2];	// parent-child sync
 
 int
 sandbox__entry(void *arg)
@@ -216,7 +216,8 @@ sandbox__init(struct sandbox_t *sandbox)
 		_EXIT(out, -1);
 	}
 
-	child_stack = mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+	child_stack = mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE,
+			   MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
 	if (child_stack == MAP_FAILED) {
 		PERROR("mmap");
 		_EXIT(out, -1);
@@ -239,7 +240,7 @@ sandbox__init(struct sandbox_t *sandbox)
 	}
 
 	close(pipe_fd[0]);
-	close(pipe_fd[1]); // done writing, signal child
+	close(pipe_fd[1]);  // done writing, signal child
 
 	if (waitpid(child_pid, &child_status, 0) < 0) {
 		PERROR("waitpid");
