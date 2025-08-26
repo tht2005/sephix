@@ -1,5 +1,5 @@
 #include "sephix/sandbox.h"
-#include "sephix/util.h"
+#include "util.h"
 #include "syscall_wrappers.h"
 
 #include <errno.h>

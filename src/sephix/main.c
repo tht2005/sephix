@@ -1,6 +1,6 @@
 #include "sephix/sandbox.h"
-#include "sephix/util.h"
 #include "sephix_build_config.h"
+#include "util.h"
 
 #include <fcntl.h>
 #include <stdio.h>
