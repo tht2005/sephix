@@ -10,8 +10,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/prctl.h>
+#include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#define STACK_SIZE ((1 << 20) + (1 << 12))
 
 int
 sandbox__entry(void *arg)
@@ -174,15 +177,13 @@ out:
 	return exit_code;
 }
 
-#define STACK_MAX (1 << 15)
-char child_stack[STACK_MAX];
-
 int
 sandbox__init(struct sandbox_t *sandbox)
 {
 	int exit_code = 0;
 
 	pid_t child_pid;
+	char *child_stack;
 	int child_status;
 
 	sandbox->clone_flags = CLONE_NEWNS;
@@ -207,9 +208,20 @@ sandbox__init(struct sandbox_t *sandbox)
 		_EXIT(out, -1);
 	}
 
+	child_stack = mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+	if (child_stack == MAP_FAILED) {
+		PERROR("mmap");
+		_EXIT(out, -1);
+	}
+
 	child_pid =
-		clone(sandbox__entry, child_stack + STACK_MAX,
+		clone(sandbox__entry, child_stack + STACK_SIZE,
 		      sandbox->clone_flags | CLONE_NEWUSER | SIGCHLD, sandbox);
+	if (child_pid < 0) {
+		PERROR("clone");
+		_EXIT(out, -1);
+	}
+	munmap(child_stack, STACK_SIZE);
 	prctl(PR_SET_PDEATHSIG,
 	      SIGKILL);	 // after parent die, send SIGKILL to child
 
