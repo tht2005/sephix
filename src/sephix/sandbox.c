@@ -16,21 +16,25 @@
 
 #define STACK_SIZE ((1 << 20) + (1 << 12))
 
+static int pipe_fd[2]; // parent-child sync
+
 int
 sandbox__entry(void *arg)
 {
 	int sig;
+	char ch;
+
 	pid_t child_pid;
 	int child_status;
 
 	struct sandbox_t *sandbox = (struct sandbox_t *)arg;
 
-	sleep(2);
-
-	printf("Inside new user namespace, uid=%d, gid=%d\n", getuid(),
-	       getgid());
-
-	printf("[DEBUG] %s\n", sandbox->exec_argv[0]);
+	close(pipe_fd[1]);
+	if (read(pipe_fd[0], &ch, 1) < 0) {
+		PERROR("read");
+		return -1;
+	}
+	close(pipe_fd[0]);
 
 	if (uts__init(sandbox) < 0) {
 		LOG_ERROR("uts__init: error");
@@ -66,8 +70,6 @@ sandbox__entry(void *arg)
 			PERROR("execv");
 			return -1;
 		}
-		// this should not return unless error
-		assert(0);
 	} else {
 		if (waitpid(child_pid, &child_status, 0) < 0) {
 			PERROR("waitpid");
@@ -84,7 +86,8 @@ sandbox__entry(void *arg)
 			return 69;
 		}
 	}
-	return 0;
+	// never reach here
+	assert(0);
 }
 
 int
@@ -208,6 +211,11 @@ sandbox__init(struct sandbox_t *sandbox)
 		_EXIT(out, -1);
 	}
 
+	if (pipe(pipe_fd) < 0) {
+		PERROR("pipe");
+		_EXIT(out, -1);
+	}
+
 	child_stack = mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
 	if (child_stack == MAP_FAILED) {
 		PERROR("mmap");
@@ -229,6 +237,9 @@ sandbox__init(struct sandbox_t *sandbox)
 		LOG_ERROR("setup_userns_mapping: error");
 		_EXIT(out, -1);
 	}
+
+	close(pipe_fd[0]);
+	close(pipe_fd[1]); // done writing, signal child
 
 	if (waitpid(child_pid, &child_status, 0) < 0) {
 		PERROR("waitpid");
