@@ -96,6 +96,7 @@ main(int argc, char **argv)
 	cfg_sec = cfg_getsec(cfg, "cli");
 	cli__max_arg_count = cfg_getint(cfg_sec, "max-arg-count");
 	cli__max_arg_len = cfg_getint(cfg_sec, "max-arg-len");
+	cfg_free(cfg);
 
 	fprintf(stderr, "[DEBUG] cli.max-arg-count = %d\n", cli__max_arg_count);
 	fprintf(stderr, "[DEBUG] cli.max-arg-len= %d\n", cli__max_arg_len);
