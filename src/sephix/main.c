@@ -1,12 +1,11 @@
 #include "config.h"
 #include "confuse.h"
-#ifdef YYDEBUG
-#include "config_parser.tab.h"
-#endif
+#include "profile.h"
 #include "sephix/sandbox.h"
 #include "sephix_build_config.h"
 #include "util.h"
 
+#include <assert.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,32 +36,6 @@ print_help()
 	printf("	--profile <file_name|profile_name>	Use a custom "
 	       "profile\n");
 	printf("\n");
-	printf("	--unshare-user			Create a new user "
-	       "namespace\n");
-	printf("	--unshare-user-try		Create a new user "
-	       "namespace if possible else skip it\n");
-	printf("	--unshare-ipc			Create a new ipc "
-	       "namespace\n");
-	printf("	--unshare-pid			Create a new pid "
-	       "namespace\n");
-	printf("	--unshare-net			Create a new network "
-	       "namespace\n");
-	printf("	--unshare-uts			Create a new uts "
-	       "namespace\n");
-	printf("	--unshare-cgroup		Create a new cgroup "
-	       "namespace\n");
-	printf("	--unshare-cgroup-try		Create a new cgroup "
-	       "namespace if possible else skip it\n");
-	printf("	--unshare-all			Unshare all possible "
-	       "namespaces\n");
-	printf("\n");
-	printf("	--bind <src> <dest>		Bind-mount the host "
-	       "path <src> on <dest>\n");
-	printf("	--dev-bind <src> <dest>		Bind-mount the host "
-	       "path <src> on <dest>, allowing device access\n");
-	printf("	--ro-bind <src> <dest>		Bind-mount the host "
-	       "path <src> on <dest>, read only on <dest>\n");
-	printf("\n");
 }
 
 void
@@ -77,8 +50,7 @@ main(int argc, char **argv)
 	int exit_code = EXIT_SUCCESS;
 	int i, j;
 
-	const char *profile_name = NULL;
-	const char *profile_filename = NULL;
+	char *profile_name = NULL;
 	char *runtime_dir = NULL;
 
 	int exec_argc = 0;
@@ -88,13 +60,10 @@ main(int argc, char **argv)
 	int status;
 
 	struct cfg_t *cfg, *cfg_sec;
-
 	int cli__max_arg_count;
 	int cli__max_arg_len;
 
-#ifdef YYDEBUG
-	yydebug = 1;
-#endif
+	struct profile_t profile = { 0 };
 
 	if (config__parse(&cfg, SYSCONF_DIR "/sephix.config") != 0) {
 		_ERR_EXIT(out);
@@ -119,6 +88,8 @@ main(int argc, char **argv)
 			goto out;
 		} else if (strcmp(argv[i], "--profile") == 0) {
 			PARSE_OPTION(1);
+			profile_name = arg[0];
+
 		} else if (strcmp(argv[i], "--unshare-user") == 0) {
 		} else if (strcmp(argv[i], "--unshare-user-try") == 0) {
 		} else if (strcmp(argv[i], "--unshare-ipc") == 0) {
@@ -155,6 +126,11 @@ main(int argc, char **argv)
 	_ERR_EXIT(out);
 
 exec:
+	assert(profile_name);
+	if (profile__parse(&profile, profile_name)) {
+		_ERR_EXIT(out);
+	}
+
 	exec_argc = argc - 1 - i;
 	if (exec_argc > cli__max_arg_count) {
 		fprintf(stderr, "[fixme] exec-argc (%d) > max-arg-count (%d)\n",

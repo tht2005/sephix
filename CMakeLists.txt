@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.10)
 project(SEPHIX VERSION 0.1.0)
 
 set(SYSCONF_DIR "/etc/sephix" CACHE STRING "")
-option(YYDEBUG "" OFF)
 
 # Dependencies
 
@@ -52,9 +51,6 @@ target_include_directories(sephix
 target_compile_definitions(sephix
 	PRIVATE _GNU_SOURCE _XOPEN_SOURCE _DEFAULT_SOURCE
 )
-if (YYDEBUG)
-	target_compile_definitions(sephix PRIVATE YYDEBUG)
-endif()
 
 target_link_libraries(sephix
 	PRIVATE ${FLEX_LIBRARIES}

@@ -24,21 +24,20 @@ log_error(const char *file, int line, const char *func, const char *fmt, ...);
  * PARSE_OPTION(2) => arg[0] = <src>, arg[1] = <dest> and i
  * += 2.
  */
-static char *arg[10];  // 10 >= maximum number of arguments of
-		       // an option
-#define PARSE_OPTION(cnt)                                               \
-	{                                                               \
-		if (i + cnt >= argc) {                                  \
-			fprintf(stderr,                                 \
-				"sephix: %s requires %d argument(s)\n", \
-				argv[i], cnt);                          \
-			goto out;                                       \
-		}                                                       \
-		for (j = 0; j < cnt; ++j) {                             \
-			arg[j] = argv[i + 1 + j];                       \
-		}                                                       \
-		i += cnt;                                               \
-	}
+// static char *arg[10];
+// #define PARSE_OPTION(cnt)                                               \
+// 	{                                                               \
+// 		if (i + cnt >= argc) {                                  \
+// 			fprintf(stderr,                                 \
+// 				"sephix: %s requires %d argument(s)\n", \
+// 				argv[i], cnt);                          \
+// 			goto out;                                       \
+// 		}                                                       \
+// 		for (j = 0; j < cnt; ++j) {                             \
+// 			arg[j] = argv[i + 1 + j];                       \
+// 		}                                                       \
+// 		i += cnt;                                               \
+// 	}
 
 char *
 file_read(const char *filename, size_t *out_size);
