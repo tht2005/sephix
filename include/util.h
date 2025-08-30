@@ -40,6 +40,8 @@ static char *arg[10];  // 10 >= maximum number of arguments of
 		i += cnt;                                               \
 	}
 
+char *
+file_read(const char *filename, size_t *out_size);
 int
 file_write(const char *file, const char *fmt, ...);
 
