@@ -1,5 +1,8 @@
 #include "config.h"
 #include "confuse.h"
+#ifdef YYDEBUG
+#include "config_parser.tab.h"
+#endif
 #include "sephix/sandbox.h"
 #include "sephix_build_config.h"
 #include "util.h"
@@ -88,6 +91,10 @@ main(int argc, char **argv)
 
 	int cli__max_arg_count;
 	int cli__max_arg_len;
+
+#ifdef YYDEBUG
+	yydebug = 1;
+#endif
 
 	if (config__parse(&cfg, SYSCONF_DIR "/sephix.config") != 0) {
 		_ERR_EXIT(out);
