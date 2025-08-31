@@ -5,6 +5,7 @@
 #include <string.h>  // do not remove
 #include <sys/mount.h>
 
+// TODO: fix loc error
 #define CMD_ERROR_0(_cmd, _fmt, ...)                                          \
 	do {                                                                  \
 		fprintf(stderr, "file %s, line %d: " _fmt "\n",               \
