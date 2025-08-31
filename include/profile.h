@@ -15,7 +15,14 @@ struct profile_data_t {
 	int unshare_ipc;
 	int unshare_uts;
 	int unshare_cgroup;
+
+	char *hostname;
+	char *domainname;
 };
+struct profile_data_t *
+profile_data_t__create();
+void
+profile_data_t__free(struct profile_data_t *prof_dt);
 
 struct scanner_extra_t {
 	// char strbuf[4096];

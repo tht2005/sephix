@@ -105,6 +105,7 @@ sandbox_setup(void *arg)
 	char *child_stack;
 
 	struct sandbox_t *sandbox = (struct sandbox_t *)arg;
+	struct profile_data_t *prof_dt = sandbox->prof_dt;
 
 	// wait parent map uid, gid on the new user namespace
 	close(pipe_fd[1]);
@@ -119,19 +120,18 @@ sandbox_setup(void *arg)
 		return -1;
 	}
 
-	static struct profile_data_t prof_dt;
-	if (profile__interpret(sandbox->profile, &prof_dt,
+	if (profile__interpret(sandbox->profile, prof_dt,
 			       sandbox->runtime_dir)) {
 		return -1;
 	}
 
 	sandbox->clone_flags = 0;
-	// if (prof_dt.unshare_user) sandbox->clone_flags |= CLONE_NEWUSER;
-	// if (prof_dt.unshare_pid) sandbox->clone_flags |= CLONE_NEWPID;
-	// if (prof_dt.unshare_uts) sandbox->clone_flags |= CLONE_NEWUTS;
-	// if (prof_dt.unshare_ipc) sandbox->clone_flags |= CLONE_NEWIPC;
-	// if (prof_dt.unshare_net) sandbox->clone_flags |= CLONE_NEWNET;
-	// if (prof_dt.unshare_cgroup) sandbox->clone_flags |= CLONE_NEWCGROUP;
+	if (prof_dt->unshare_user) sandbox->clone_flags |= CLONE_NEWUSER;
+	if (prof_dt->unshare_pid) sandbox->clone_flags |= CLONE_NEWPID;
+	if (prof_dt->unshare_uts) sandbox->clone_flags |= CLONE_NEWUTS;
+	if (prof_dt->unshare_ipc) sandbox->clone_flags |= CLONE_NEWIPC;
+	if (prof_dt->unshare_net) sandbox->clone_flags |= CLONE_NEWNET;
+	if (prof_dt->unshare_cgroup) sandbox->clone_flags |= CLONE_NEWCGROUP;
 
 	// switch to sandbox_entry
 	child_stack = mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE,
@@ -443,6 +443,34 @@ command_interpret(struct profile_command_t *cmd,
 				    argv1, strerror(errno));
 			_EXIT(out, -1);
 		}
+	} else if (strcmp(argv0, "hostname") == 0) {
+		ARGC_GUARD(2, 2);
+		if (!prof_dt->unshare_uts) {
+			CMD_ERROR_0(cmd,
+				    "unshare-uts must be enabled before using "
+				    "hostname command");
+			_EXIT(out, -1);
+		}
+		free(prof_dt->hostname);
+		prof_dt->hostname = strdup(argv1);
+		if (prof_dt->hostname == NULL) {
+			PERROR("strdup");
+			_EXIT(out, -1);
+		}
+	} else if (strcmp(argv0, "domainname") == 0) {
+		ARGC_GUARD(2, 2);
+		if (!prof_dt->unshare_uts) {
+			CMD_ERROR_0(cmd,
+				    "unshare-uts must be enabled before using "
+				    "domainname command");
+			_EXIT(out, -1);
+		}
+		free(prof_dt->domainname);
+		prof_dt->domainname = strdup(argv1);
+		if (prof_dt->domainname == NULL) {
+			PERROR("strdup");
+			_EXIT(out, -1);
+		}
 	} else {
 		CMD_ERROR_0(cmd, "command '%s' do not exists", argv0);
 		_EXIT(out, -1);
@@ -460,14 +488,6 @@ profile__interpret(struct profile_t *profile,
 	int i;
 	struct profile_command_list_t *cmd_list;
 	struct profile_command_t *cmd;
-
-	// default values
-	prof_dt->unshare_user = 0;
-	prof_dt->unshare_pid = 0;
-	prof_dt->unshare_net = 0;
-	prof_dt->unshare_ipc = 0;
-	prof_dt->unshare_uts = 0;
-	prof_dt->unshare_cgroup = 0;
 
 	if (profile->cmd_list) {
 		cmd_list = profile->cmd_list;

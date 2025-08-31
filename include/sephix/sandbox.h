@@ -12,6 +12,7 @@ struct sandbox_t {
 	uid_t uid;
 
 	struct profile_t *profile;
+	struct profile_data_t *prof_dt;
 
 	const char *name;
 	char *runtime_dir;

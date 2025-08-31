@@ -6,7 +6,6 @@
 
 #include <assert.h>
 #include <dirent.h>
-#include <errno.h>
 #include <pwd.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -16,6 +15,44 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+struct profile_data_t *
+profile_data_t__create()
+{
+	struct profile_data_t *prof_dt;
+	prof_dt =
+		(struct profile_data_t *)malloc(sizeof(struct profile_data_t));
+	if (prof_dt == NULL) {
+		PERROR("malloc");
+		return NULL;
+	}
+
+	prof_dt->unshare_user = 0;
+	prof_dt->unshare_pid = 0;
+	prof_dt->unshare_net = 0;
+	prof_dt->unshare_ipc = 0;
+	prof_dt->unshare_uts = 0;
+	prof_dt->unshare_cgroup = 0;
+
+	prof_dt->hostname = strdup("sephix");
+	if (prof_dt->hostname == NULL) {
+		PERROR("strdup");
+		return NULL;
+	}
+	prof_dt->domainname = strdup("");
+	if (prof_dt->domainname == NULL) {
+		PERROR("strdup");
+		return NULL;
+	}
+	return prof_dt;
+}
+void
+profile_data_t__free(struct profile_data_t *prof_dt)
+{
+	free(prof_dt->hostname);
+	free(prof_dt->domainname);
+	free(prof_dt);
+}
 
 struct string_list_t *
 string_list_t__create()

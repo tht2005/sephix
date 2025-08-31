@@ -64,7 +64,14 @@ main(int argc, char **argv)
 	int cli__max_arg_count;
 	int cli__max_arg_len;
 
-	struct profile_t profile = {0};
+	static struct profile_t profile = {0};
+	static struct profile_data_t *prof_dt;
+
+	prof_dt = profile_data_t__create();
+	if (prof_dt == NULL) {
+		LOG_ERROR("profile_data_t");
+		_EXIT(out, -1);
+	}
 
 #if YYDEBUG == 1
 	yydebug = 1;
@@ -172,6 +179,7 @@ exec:
 		.uid = getuid(),
 		.name = NULL,
 		.profile = &profile,
+		.prof_dt = prof_dt,
 		.runtime_dir = runtime_dir,
 		.exec_argc = exec_argc,
 		.exec_argv = exec_argv,
@@ -183,7 +191,8 @@ exec:
 	}
 
 out:
-	// free profile
+	// [TODO] free profile
+	if (prof_dt) profile_data_t__free(prof_dt);
 	if (runtime_dir) free(runtime_dir);
 	if (exec_argv) free(exec_argv);
 	return exit_code;
