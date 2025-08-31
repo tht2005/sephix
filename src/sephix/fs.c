@@ -85,51 +85,6 @@ fs__prepare_new_root(struct sandbox_t *sandbox)
 		// move to somewhere
 	// }
 
-	// [TODO] test bash, in future read config and bind
-	// mkdir2(sandbox->runtime_dir, "/mnt/proc", 0755);
-	// if (sandbox->clone_flags & CLONE_NEWPID) {
-	// 	mount2("proc", sandbox->runtime_dir, "/mnt/proc", "proc", 0,
-	// 	       NULL);
-	// } else {
-	// 	mount2("/proc", sandbox->runtime_dir, "/mnt/proc", NULL,
-	// 	       MS_BIND | MS_REC, NULL);
-	// }
-	//
-	// if (mkdir2(sandbox->runtime_dir, "/mnt/dev", 0755) < 0) {
-	// 	PERROR("mkdir2");
-	// }
-	// if (mount2("/dev", sandbox->runtime_dir, "/mnt/dev", NULL, MS_BIND | MS_REC,
-	//        NULL) < 0) {
-	// 	PERROR("mount2");
-	// }
-	//
-	// mkdir2(sandbox->runtime_dir, "/mnt/usr", 0755);
-	// mount2("/usr", sandbox->runtime_dir, "/mnt/usr", NULL, MS_BIND | MS_REC,
-	//        NULL);
-	//
-	// mkdir2(sandbox->runtime_dir, "/mnt/home", 0755);
-	// mount2("/home", sandbox->runtime_dir, "/mnt/home", NULL,
-	//        MS_BIND | MS_REC, NULL);
-	//
-	// mkdir2(sandbox->runtime_dir, "/mnt/bin", 0755);
-	// mount2("/bin", sandbox->runtime_dir, "/mnt/bin", NULL, MS_BIND | MS_REC,
-	//        NULL);
-	//
-	// mkdir2(sandbox->runtime_dir, "/mnt/opt", 0755);
-	// mount2("/opt", sandbox->runtime_dir, "/mnt/opt", NULL, MS_BIND | MS_REC,
-	//        NULL);
-	//
-	// mkdir2(sandbox->runtime_dir, "/mnt/etc", 0755);
-	// mount2("/etc", sandbox->runtime_dir, "/mnt/etc", NULL, MS_BIND | MS_REC,
-	//        NULL);
-	//
-	// mkdir2(sandbox->runtime_dir, "/mnt/lib", 0755);
-	// mkdir2(sandbox->runtime_dir, "/mnt/lib64", 0755);
-	// mount2("/lib", sandbox->runtime_dir, "/mnt/lib", NULL, MS_BIND | MS_REC,
-	//        NULL);
-	// mount2("/lib64", sandbox->runtime_dir, "/mnt/lib64", NULL,
-	//        MS_BIND | MS_REC, NULL);
-
 	return 0;
 }
 
