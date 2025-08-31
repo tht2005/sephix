@@ -1,7 +1,12 @@
+#include "profile.h"
+#include "profile_parser.tab.h"
+#include "config.h"
+#include "confuse.h"
 #include "sephix/sandbox.h"
 #include "sephix_build_config.h"
 #include "util.h"
 
+#include <assert.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,32 +37,6 @@ print_help()
 	printf("	--profile <file_name|profile_name>	Use a custom "
 	       "profile\n");
 	printf("\n");
-	printf("	--unshare-user			Create a new user "
-	       "namespace\n");
-	printf("	--unshare-user-try		Create a new user "
-	       "namespace if possible else skip it\n");
-	printf("	--unshare-ipc			Create a new ipc "
-	       "namespace\n");
-	printf("	--unshare-pid			Create a new pid "
-	       "namespace\n");
-	printf("	--unshare-net			Create a new network "
-	       "namespace\n");
-	printf("	--unshare-uts			Create a new uts "
-	       "namespace\n");
-	printf("	--unshare-cgroup		Create a new cgroup "
-	       "namespace\n");
-	printf("	--unshare-cgroup-try		Create a new cgroup "
-	       "namespace if possible else skip it\n");
-	printf("	--unshare-all			Unshare all possible "
-	       "namespaces\n");
-	printf("\n");
-	printf("	--bind <src> <dest>		Bind-mount the host "
-	       "path <src> on <dest>\n");
-	printf("	--dev-bind <src> <dest>		Bind-mount the host "
-	       "path <src> on <dest>, allowing device access\n");
-	printf("	--ro-bind <src> <dest>		Bind-mount the host "
-	       "path <src> on <dest>, read only on <dest>\n");
-	printf("\n");
 }
 
 void
@@ -72,8 +51,8 @@ main(int argc, char **argv)
 	int exit_code = EXIT_SUCCESS;
 	int i, j;
 
-	const char *profile_name = NULL;
-	const char *profile_filename = NULL;
+	char *profile_name = NULL;
+	char *runtime_dir = NULL;
 
 	int exec_argc = 0;
 	char **exec_argv = NULL;
@@ -81,10 +60,33 @@ main(int argc, char **argv)
 	pid_t child_pid;
 	int status;
 
-	char *runtime_dir = NULL;
+	struct cfg_t *cfg, *cfg_sec;
+	int cli__max_arg_count;
+	int cli__max_arg_len;
 
-	fprintf(stderr, "[DEBUG] max-arg-count = %d\n", max_arg_count);
-	fprintf(stderr, "[DEBUG] max-arg-len= %d\n", max_arg_len);
+	static struct profile_t profile = {0};
+	static struct profile_data_t *prof_dt;
+
+	prof_dt = profile_data_t__create();
+	if (prof_dt == NULL) {
+		LOG_ERROR("profile_data_t");
+		_EXIT(out, -1);
+	}
+
+#if YYDEBUG == 1
+	yydebug = 1;
+#endif
+	if (config__parse(&cfg, SYSCONF_DIR "/sephix.config") != 0) {
+		_ERR_EXIT(out);
+	}
+
+	cfg_sec = cfg_getsec(cfg, "cli");
+	cli__max_arg_count = cfg_getint(cfg_sec, "max-arg-count");
+	cli__max_arg_len = cfg_getint(cfg_sec, "max-arg-len");
+	cfg_free(cfg);
+
+	fprintf(stderr, "[DEBUG] cli.max-arg-count = %d\n", cli__max_arg_count);
+	fprintf(stderr, "[DEBUG] cli.max-arg-len= %d\n", cli__max_arg_len);
 
 	for (i = 1; i < argc; ++i) {
 		if (strcmp(argv[i], "-h") == 0 ||
@@ -95,29 +97,12 @@ main(int argc, char **argv)
 			   strcmp(argv[i], "--version") == 0) {
 			print_version();
 			goto out;
-		}
-
-		else if (strcmp(argv[i], "--profile") == 0) {
+		} else if (strcmp(argv[i], "--profile") == 0) {
 			PARSE_OPTION(1);
-		} else if (strcmp(argv[i], "--unshare-user") == 0) {
-		} else if (strcmp(argv[i], "--unshare-user-try") == 0) {
-		} else if (strcmp(argv[i], "--unshare-ipc") == 0) {
-		} else if (strcmp(argv[i], "--unshare-pid") == 0) {
-		} else if (strcmp(argv[i], "--unshare-net") == 0) {
-		} else if (strcmp(argv[i], "--unshare-uts") == 0) {
-		} else if (strcmp(argv[i], "--unshare-cgroup") == 0) {
-		} else if (strcmp(argv[i], "--unshare-cgroup-try") == 0) {
-		} else if (strcmp(argv[i], "--unshare-all") == 0) {
-		} else if (strcmp(argv[i], "--bind") == 0) {
-			PARSE_OPTION(2);
-
-		}
-
-		else if (strcmp(argv[i], "exec") == 0) {
+			profile_name = arg[0];
+		} else if (strcmp(argv[i], "exec") == 0) {
 			goto exec;
-		}
-
-		else {
+		} else {
 			if (strncmp(argv[i], "-", 1) == 0 ||
 			    strncmp(argv[i], "--", 2) == 0) {
 				fprintf(stderr,
@@ -139,10 +124,15 @@ main(int argc, char **argv)
 	_ERR_EXIT(out);
 
 exec:
+	assert(profile_name);
+	if (profile__parse(&profile, profile_name)) {
+		_ERR_EXIT(out);
+	}
+
 	exec_argc = argc - 1 - i;
-	if (exec_argc > max_arg_count) {
+	if (exec_argc > cli__max_arg_count) {
 		fprintf(stderr, "[fixme] exec-argc (%d) > max-arg-count (%d)\n",
-			exec_argc, max_arg_count);
+			exec_argc, cli__max_arg_count);
 		_ERR_EXIT(out);
 	}
 	exec_argv = (char **)malloc((exec_argc + 1) * sizeof(char *));
@@ -152,11 +142,11 @@ exec:
 	}
 	for (j = 0; j < exec_argc; ++j) {
 		exec_argv[j] = argv[i + 1 + j];
-		if (strlen(exec_argv[j]) > max_arg_len) {
+		if (strlen(exec_argv[j]) > cli__max_arg_len) {
 			fprintf(stderr,
 				"[fixme] len(exec-argv[j]) (%lu) > max-arg-len "
 				"(%d)\n",
-				strlen(exec_argv[j]), max_arg_len);
+				strlen(exec_argv[j]), cli__max_arg_len);
 			_ERR_EXIT(out);
 		}
 	}
@@ -188,17 +178,22 @@ exec:
 		.gid = getgid(),
 		.uid = getuid(),
 		.name = NULL,
+		.profile = &profile,
+		.prof_dt = prof_dt,
 		.runtime_dir = runtime_dir,
 		.exec_argc = exec_argc,
 		.exec_argv = exec_argv,
 	};
 
-	if (sandbox__init(&sandbox)) {
+	if (sandbox__init(&sandbox) < 0) {
 		LOG_ERROR("sandbox__init failed");
 		_ERR_EXIT(out);
 	}
 
 out:
+	// [TODO] free sandbox
+	// [TODO] free profile
+	if (prof_dt) profile_data_t__free(prof_dt);
 	if (runtime_dir) free(runtime_dir);
 	if (exec_argv) free(exec_argv);
 	return exit_code;

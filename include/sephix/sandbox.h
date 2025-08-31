@@ -1,6 +1,7 @@
 #ifndef __SEPHIX__SANDBOX_H
 #define __SEPHIX__SANDBOX_H
 
+#include "profile.h"
 #include <sys/types.h>
 
 struct sandbox_t {
@@ -10,7 +11,8 @@ struct sandbox_t {
 	gid_t gid;
 	uid_t uid;
 
-	// variable that store policy profile
+	struct profile_t *profile;
+	struct profile_data_t *prof_dt;
 
 	const char *name;
 	char *runtime_dir;

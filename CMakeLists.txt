@@ -3,20 +3,62 @@ cmake_minimum_required(VERSION 3.10)
 project(SEPHIX VERSION 0.1.0)
 
 set(SYSCONF_DIR "/etc/sephix" CACHE STRING "")
+option(YYDEBUG "" OFF)
+
+# Dependencies
+
+find_package(FLEX 2.6.4 REQUIRED)
+find_package(BISON 3.8.2 REQUIRED)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(CONFUSE REQUIRED libconfuse)
+
+# Configure
 
 configure_file(
 	${CMAKE_SOURCE_DIR}/include/sephix_build_config.h.in
 	${CMAKE_BINARY_DIR}/include/sephix_build_config.h
 )
+
+flex_target(profile_lexer ${CMAKE_SOURCE_DIR}/src/profile/lexer.l
+	${CMAKE_BINARY_DIR}/src/profile_lexer.c
+	DEFINES_FILE ${CMAKE_BINARY_DIR}/include/profile_lexer.h
+)
+bison_target(profile_parser ${CMAKE_SOURCE_DIR}/src/profile/parser.y
+	${CMAKE_BINARY_DIR}/src/profile_parser.tab.c
+	DEFINES_FILE ${CMAKE_BINARY_DIR}/include/profile_parser.tab.h
+)
+add_flex_bison_dependency(profile_lexer profile_parser)
+
+# Compile
+
 file(GLOB_RECURSE SRC_FILES
-	"${CMAKE_SOURCE_DIR}/src/*.c"
-	"${CMAKE_SOURCE_DIR}/include/*.h"
+	${CMAKE_SOURCE_DIR}/src/*.c
+	${CMAKE_SOURCE_DIR}/include/*.h
+	${CMAKE_BINARY_DIR}/src/*.c
+	${CMAKE_BINARY_DIR}/include/*.h
 )
-add_executable(sephix ${SRC_FILES})
+add_executable(sephix
+	${SRC_FILES}
+	${FLEX_profile_lexer_OUTPUTS}
+	${BISON_profile_parser_OUTPUTS}
+)
+
 target_include_directories(sephix
-	PRIVATE ${CMAKE_SOURCE_DIR}/include
-	PRIVATE ${CMAKE_BINARY_DIR}/include
+	PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_BINARY_DIR}/include
+	PRIVATE ${FLEX_INCLUDE_DIRS} ${CONFUSE_INCLUDE_DIRS}
 )
+
 target_compile_definitions(sephix
 	PRIVATE _GNU_SOURCE _XOPEN_SOURCE _DEFAULT_SOURCE
+)
+if (YYDEBUG)
+	target_compile_definitions(sephix
+		PRIVATE YYDEBUG=1
+	)
+endif()
+
+target_link_libraries(sephix
+	PRIVATE ${FLEX_LIBRARIES}
+	PRIVATE ${CONFUSE_LIBRARIES}
 )

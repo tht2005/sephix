@@ -23,6 +23,46 @@ log_error(const char *file, int line, const char *func, const char *fmt, ...)
 	va_end(args);
 }
 
+char *
+file_read(const char *filename, size_t *out_size)
+{
+	char *buf = NULL;
+	FILE *fp;
+	long size;
+
+	fp = fopen(filename, "r");
+	if (fp == NULL) {
+		PERROR("fopen");
+		goto out;
+	}
+	if (fseek(fp, 0, SEEK_END) != 0) {
+		PERROR("fseek");
+		goto out;
+	}
+	size = ftell(fp);
+	if (size < 0) {
+		PERROR("ftell");
+		goto out;
+	}
+	rewind(fp);
+	buf = (char *)malloc((size + 1) * sizeof(char));
+	if (!buf) {
+		PERROR("malloc");
+		goto out;
+	}
+	if (fread(buf, 1, size, fp) != (unsigned long)size) {
+		PERROR("fread");
+		free(buf);
+		buf = NULL;
+		goto out;
+	}
+	buf[size] = '\0';
+	if (out_size) *out_size = size;
+out:
+	if (fp) fclose(fp);
+	return buf;
+}
+
 int
 file_write(const char *file, const char *fmt, ...)
 {
