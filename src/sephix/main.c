@@ -191,6 +191,7 @@ exec:
 	}
 
 out:
+	// [TODO] free sandbox
 	// [TODO] free profile
 	if (prof_dt) profile_data_t__free(prof_dt);
 	if (runtime_dir) free(runtime_dir);
