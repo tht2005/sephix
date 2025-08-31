@@ -68,6 +68,15 @@ sandbox_entry(void *arg)
 		return -1;
 	}
 
+	// ipc__init
+	if (sandbox->clone_flags & CLONE_NEWIPC) {
+		if (mount2("mqueue", sandbox->runtime_dir, "/mnt/dev/mqueue",
+			   "mqueue", 0, NULL) < 0) {
+			PERROR("mount2");
+			return -1;
+		}
+	}
+
 	if (fs__chroot(sandbox) < 0) {
 		LOG_ERROR("fs__chroot: error");
 		return -1;

@@ -80,11 +80,6 @@ fs__prepare_new_root(struct sandbox_t *sandbox)
 		return -1;
 	}
 
-	// if (sandbox->clone_flags & CLONE_NEWIPC) {
-		// [TODO] mount mqueue?
-		// move to somewhere
-	// }
-
 	return 0;
 }
 
