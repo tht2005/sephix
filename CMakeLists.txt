@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 project(SEPHIX VERSION 0.1.0)
 
 set(SYSCONF_DIR "/etc/sephix" CACHE STRING "")
+option(YYDEBUG "" OFF)
 
 # Dependencies
 
@@ -19,15 +20,15 @@ configure_file(
 	${CMAKE_BINARY_DIR}/include/sephix_build_config.h
 )
 
-# flex_target(config_lexer ${CMAKE_SOURCE_DIR}/src/config/lexer.l 
-# 	${CMAKE_BINARY_DIR}/src/config_lexer.c
-# 	DEFINES_FILE ${CMAKE_BINARY_DIR}/include/config_lexer.h
-# )
-# bison_target(config_parser ${CMAKE_SOURCE_DIR}/src/config/parser.y
-# 	${CMAKE_BINARY_DIR}/src/config_parser.tab.c
-# 	DEFINES_FILE ${CMAKE_BINARY_DIR}/include/config_parser.tab.h
-# )
-# add_flex_bison_dependency(config_lexer config_parser)
+flex_target(profile_lexer ${CMAKE_SOURCE_DIR}/src/profile/lexer.l
+	${CMAKE_BINARY_DIR}/src/profile_lexer.c
+	DEFINES_FILE ${CMAKE_BINARY_DIR}/include/profile_lexer.h
+)
+bison_target(profile_parser ${CMAKE_SOURCE_DIR}/src/profile/parser.y
+	${CMAKE_BINARY_DIR}/src/profile_parser.tab.c
+	DEFINES_FILE ${CMAKE_BINARY_DIR}/include/profile_parser.tab.h
+)
+add_flex_bison_dependency(profile_lexer profile_parser)
 
 # Compile
 
@@ -39,8 +40,8 @@ file(GLOB_RECURSE SRC_FILES
 )
 add_executable(sephix
 	${SRC_FILES}
-	${FLEX_config_lexer_OUTPUTS}
-	${BISON_config_parser_OUTPUTS}
+	${FLEX_profile_lexer_OUTPUTS}
+	${BISON_profile_parser_OUTPUTS}
 )
 
 target_include_directories(sephix
@@ -51,6 +52,11 @@ target_include_directories(sephix
 target_compile_definitions(sephix
 	PRIVATE _GNU_SOURCE _XOPEN_SOURCE _DEFAULT_SOURCE
 )
+if (YYDEBUG)
+	target_compile_definitions(sephix
+		PRIVATE YYDEBUG=1
+	)
+endif()
 
 target_link_libraries(sephix
 	PRIVATE ${FLEX_LIBRARIES}

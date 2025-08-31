@@ -1,59 +1,36 @@
 %option noyywrap
 %option yylineno
+%option reentrant
 %option bison-bridge
-%option never-interactive
+%option bison-locations
 
 %{
-#include "config.h"
-#include "config_parser.tab.h"
-#include "util.h"
+#include "profile.h"
+#include "profile_parser.tab.h"
 
 #include <string.h>
-#include <stdlib.h>
+
+#define extra ((struct scanner_extra_t *)yyextra)
 %}
 
-%x EQ_STATE VL_STATE 
-
 %%
-
-<*>"#"[^\n]*	;
-
-"["[a-zA-Z0-9_\-]+"]" {
-	int len = yyleng - 2;
-	yylval->str = (char *)malloc(len + 1);
-	if (!yylval->str) {
-		PERROR("malloc");
-		exit(EXIT_FAILURE);
-	}
-	strncpy(yylval->str, yytext + 1, len);
-	yylval->str[len] = '\0';	
-	return SECTION_HEADER;
+[ \t]+			{
+	return WHITESPACE;
 }
-
-[a-zA-Z0-9_\-]+ {
+\n			{
+		return EOL;
+}
+\'[^']*\'		{
 	yylval->str = strdup(yytext);
-	if (!yylval->str) {
-		PERROR("strdup");
-		exit(EXIT_FAILURE);
-	}
-	BEGIN(EQ_STATE);
-	return KEY;
+	return WORD;
 }
-
-<EQ_STATE>[ \t]*"=" {
-	BEGIN(VL_STATE);
-}
-
-<VL_STATE>[^\n]* {
+\"([^"\\]|\\.)*\"	{
 	yylval->str = strdup(yytext);
-	if (!yylval->str) {
-		PERROR("strdup");
-		exit(EXIT_FAILURE);
-	}
-	BEGIN(INITIAL);
-	return VALUE;
+	return WORD;
 }
-
-\n	;
+([^ \t\n\\]|\\.)+	{
+	yylval->str = strdup(yytext);
+	return WORD;
+}
 
 %%

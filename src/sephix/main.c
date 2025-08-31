@@ -1,6 +1,7 @@
+#include "profile.h"
+#include "profile_parser.tab.h"
 #include "config.h"
 #include "confuse.h"
-#include "profile.h"
 #include "sephix/sandbox.h"
 #include "sephix_build_config.h"
 #include "util.h"
@@ -63,8 +64,11 @@ main(int argc, char **argv)
 	int cli__max_arg_count;
 	int cli__max_arg_len;
 
-	struct profile_t profile = { 0 };
+	struct profile_t profile = {0};
 
+#if YYDEBUG == 1
+	yydebug = 1;
+#endif
 	if (config__parse(&cfg, SYSCONF_DIR "/sephix.config") != 0) {
 		_ERR_EXIT(out);
 	}
@@ -89,19 +93,6 @@ main(int argc, char **argv)
 		} else if (strcmp(argv[i], "--profile") == 0) {
 			PARSE_OPTION(1);
 			profile_name = arg[0];
-
-		} else if (strcmp(argv[i], "--unshare-user") == 0) {
-		} else if (strcmp(argv[i], "--unshare-user-try") == 0) {
-		} else if (strcmp(argv[i], "--unshare-ipc") == 0) {
-		} else if (strcmp(argv[i], "--unshare-pid") == 0) {
-		} else if (strcmp(argv[i], "--unshare-net") == 0) {
-		} else if (strcmp(argv[i], "--unshare-uts") == 0) {
-		} else if (strcmp(argv[i], "--unshare-cgroup") == 0) {
-		} else if (strcmp(argv[i], "--unshare-cgroup-try") == 0) {
-		} else if (strcmp(argv[i], "--unshare-all") == 0) {
-		} else if (strcmp(argv[i], "--bind") == 0) {
-			PARSE_OPTION(2);
-
 		} else if (strcmp(argv[i], "exec") == 0) {
 			goto exec;
 		} else {
@@ -180,17 +171,19 @@ exec:
 		.gid = getgid(),
 		.uid = getuid(),
 		.name = NULL,
+		.profile = &profile,
 		.runtime_dir = runtime_dir,
 		.exec_argc = exec_argc,
 		.exec_argv = exec_argv,
 	};
 
-	if (sandbox__init(&sandbox)) {
+	if (sandbox__init(&sandbox) < 0) {
 		LOG_ERROR("sandbox__init failed");
 		_ERR_EXIT(out);
 	}
 
 out:
+	// free profile
 	if (runtime_dir) free(runtime_dir);
 	if (exec_argv) free(exec_argv);
 	return exit_code;

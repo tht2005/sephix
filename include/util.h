@@ -2,11 +2,26 @@
 #define __SEPHIX__UTIL_H
 
 #include <errno.h>
-#include <string.h> // do not remove
+#include <string.h>  // do not remove
 #include <sys/mount.h>
 
-#define LOG_ERROR(fmt, ...) \
-	log_error(__FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__)
+#define CMD_ERROR_0(_cmd, _fmt, ...)                                          \
+	do {                                                                  \
+		fprintf(stderr, "file %s, line %d: " _fmt "\n",               \
+			_cmd->filename, _cmd->loc.first_line, ##__VA_ARGS__); \
+	} while (0)
+#define CMD_ERROR_1(_cmd, _fmt, ...)                                       \
+	do {                                                               \
+		fprintf(stderr, "file %s, line %d, column %d: " _fmt "\n", \
+			_cmd->filename, _cmd->loc.first_line,              \
+			_cmd->loc.first_column, ##__VA_ARGS__);            \
+	} while (0)
+
+#define LOG_ERROR(fmt, ...)                                                  \
+	do {                                                                 \
+		log_error(__FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__); \
+	} while (0)
+
 void
 log_error(const char *file, int line, const char *func, const char *fmt, ...);
 #define PERROR(str) LOG_ERROR("%s: %s", str, strerror(errno))
@@ -24,20 +39,20 @@ log_error(const char *file, int line, const char *func, const char *fmt, ...);
  * PARSE_OPTION(2) => arg[0] = <src>, arg[1] = <dest> and i
  * += 2.
  */
-// static char *arg[10];
-// #define PARSE_OPTION(cnt)                                               \
-// 	{                                                               \
-// 		if (i + cnt >= argc) {                                  \
-// 			fprintf(stderr,                                 \
-// 				"sephix: %s requires %d argument(s)\n", \
-// 				argv[i], cnt);                          \
-// 			goto out;                                       \
-// 		}                                                       \
-// 		for (j = 0; j < cnt; ++j) {                             \
-// 			arg[j] = argv[i + 1 + j];                       \
-// 		}                                                       \
-// 		i += cnt;                                               \
-// 	}
+static char *arg[10];
+#define PARSE_OPTION(cnt)                                               \
+	{                                                               \
+		if (i + cnt >= argc) {                                  \
+			fprintf(stderr,                                 \
+				"sephix: %s requires %d argument(s)\n", \
+				argv[i], cnt);                          \
+			goto out;                                       \
+		}                                                       \
+		for (j = 0; j < cnt; ++j) {                             \
+			arg[j] = argv[i + 1 + j];                       \
+		}                                                       \
+		i += cnt;                                               \
+	}
 
 char *
 file_read(const char *filename, size_t *out_size);

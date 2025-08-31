@@ -49,12 +49,18 @@ DisableFormat:   false
 ExperimentalAutoDetectBinPacking: false
 ForEachMacros:   [ foreach, Q_FOREACH, BOOST_FOREACH ]
 IncludeCategories:
-  - Regex:           '^<.*\.h>'
+  - Regex:           '^"profile\.h"'
     Priority:        1
-  - Regex:           '^<.*'
+  - Regex:           '^".*_parser\.tab\.h"'
+    Priority:        1
+  - Regex:           '^".*_lexer\.h"'
     Priority:        2
-  - Regex:           '.*'
+  - Regex:           '^<.*\.h>'
     Priority:        3
+  - Regex:           '^<.*'
+    Priority:        4
+  - Regex:           '.*'
+    Priority:        5
 IncludeIsMainRegex: '([-_](test|unittest))?$'
 IndentCaseLabels: true
 IndentWidth:     8
