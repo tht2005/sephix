@@ -14,6 +14,8 @@ struct sandbox_t {
 	struct profile_t *profile;
 	struct profile_data_t *prof_dt;
 
+	int ruleset_fd; //landlock
+
 	const char *name;
 	char *runtime_dir;
 

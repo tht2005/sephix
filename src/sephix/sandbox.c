@@ -1,9 +1,12 @@
 #include "sephix/sandbox.h"
 #include "profile.h"
+#include "sephix/landlock.h"
 #include "util.h"
 
 #include <assert.h>
 #include <fcntl.h>
+#include <glob.h>
+#include <linux/landlock.h>
 #include <linux/prctl.h>
 #include <sched.h>
 #include <signal.h>
@@ -45,9 +48,7 @@
 	} while (0)
 
 int
-profile__interpret(struct profile_t *profile,
-		   struct profile_data_t *prof_dt,
-		   const char *runtime_dir);
+profile__interpret(struct sandbox_t *sandbox, struct profile_data_t *prof_dt);
 
 static int pipe_fd[2];	// parent-child sync
 
@@ -84,6 +85,11 @@ sandbox_entry(void *arg)
 
 	if ((sandbox->clone_flags & CLONE_NEWUSER) == 0) {
 		// [TODO] return to previous user namespace
+	}
+
+	if (landlock__apply_ruleset(sandbox->ruleset_fd) < 0) {
+		PERROR("landlock__apply_ruleset");
+		return -1;
 	}
 
 	child_pid = fork();
@@ -129,10 +135,13 @@ sandbox_setup(void *arg)
 		return -1;
 	}
 
-	if (profile__interpret(sandbox->profile, prof_dt,
-			       sandbox->runtime_dir)) {
+	sandbox->ruleset_fd = landlock__create_ruleset_fd();
+	if (sandbox->ruleset_fd < 0) {
+		LOG_ERROR("landlock__create_ruleset_fd");
 		return -1;
 	}
+
+	if (profile__interpret(sandbox, prof_dt)) return -1;
 
 	sandbox->clone_flags = 0;
 	if (prof_dt->unshare_user) sandbox->clone_flags |= CLONE_NEWUSER;
@@ -336,25 +345,25 @@ boolean_value_parse(int *variable, int def, const char *str)
 	return 0;
 }
 
-#define MIN_ARGC_GUARD(_min_argc)                                          \
-	do {                                                               \
-		if (argc < _min_argc) {                                    \
-			CMD_ERROR_1(cmd,                                   \
-				    "%s command do not take less than %d " \
-				    "argument(s)",                         \
-				    argv0, _min_argc);                     \
-			_EXIT(out, -1);                                    \
-		}                                                          \
+#define MIN_ARGC_GUARD(_min_argc)                                            \
+	do {                                                                 \
+		if (argc < _min_argc) {                                      \
+			CMD_ERROR_1(cmd,                                     \
+				    "'%s' command do not take less than %d " \
+				    "argument(s)",                           \
+				    argv0, _min_argc);                       \
+			_EXIT(out, -1);                                      \
+		}                                                            \
 	} while (0)
-#define MAX_ARGC_GUARD(_max_argc)                                          \
-	do {                                                               \
-		if (argc > _max_argc) {                                    \
-			CMD_ERROR_1(cmd,                                   \
-				    "%s command do not take more than %d " \
-				    "argument(s)",                         \
-				    argv0, _max_argc);                     \
-			_EXIT(out, -1);                                    \
-		}                                                          \
+#define MAX_ARGC_GUARD(_max_argc)                                            \
+	do {                                                                 \
+		if (argc > _max_argc) {                                      \
+			CMD_ERROR_1(cmd,                                     \
+				    "'%s' command do not take more than %d " \
+				    "argument(s)",                           \
+				    argv0, _max_argc);                       \
+			_EXIT(out, -1);                                      \
+		}                                                            \
 	} while (0)
 #define ARGC_GUARD(_min_argc, _max_argc)   \
 	do {                               \
@@ -370,16 +379,26 @@ boolean_value_parse(int *variable, int def, const char *str)
 
 int
 command_interpret(struct profile_command_t *cmd,
-		  struct profile_data_t *prof_dt,
-		  const char *runtime_dir)
+		  struct sandbox_t *sandbox,
+		  struct profile_data_t *prof_dt)
 {
 	int exit_code = 0;
+
 	int i;
 	int argc;
+	char *ptr;
 	char *argv0, *argv1, *argv2;
 	char **argv;
 
+	int g_ret;
+	int g_flags;
+	glob_t g_results;
+
+	int ruleset_fd = sandbox->ruleset_fd;
+	char *runtime_dir = sandbox->runtime_dir;
 	char *newroot_dir = NULL;
+
+	__u64 access;
 
 	if (asprintf(&newroot_dir, "%s/mnt", runtime_dir) < 0) {
 		PERROR("asprintf");
@@ -480,6 +499,68 @@ command_interpret(struct profile_command_t *cmd,
 			PERROR("strdup");
 			_EXIT(out, -1);
 		}
+	} else if (strcmp(argv0, "perm") == 0) {
+		MIN_ARGC_GUARD(3);
+		access = 0;
+		for (ptr = argv1; *ptr; ++ptr) {
+			switch (*ptr) {
+					// clang-format off
+				case 'r':
+					access |= LANDLOCK_ACCESS_FS_READ_FILE;
+					access |= LANDLOCK_ACCESS_FS_READ_DIR;
+					break;
+				case 'w':
+					access |= LANDLOCK_ACCESS_FS_WRITE_FILE;
+					access |= LANDLOCK_ACCESS_FS_TRUNCATE;
+					access |= LANDLOCK_ACCESS_FS_REMOVE_FILE;
+					access |= LANDLOCK_ACCESS_FS_REMOVE_DIR;
+					break;
+				case 'x':
+					access |= LANDLOCK_ACCESS_FS_EXECUTE;
+					break;
+				case 'c':
+					access |= LANDLOCK_ACCESS_FS_MAKE_REG;
+					access |= LANDLOCK_ACCESS_FS_MAKE_DIR;
+					access |= LANDLOCK_ACCESS_FS_MAKE_SOCK;
+					access |= LANDLOCK_ACCESS_FS_MAKE_FIFO;
+					access |= LANDLOCK_ACCESS_FS_MAKE_SYM;
+					access |= LANDLOCK_ACCESS_FS_MAKE_BLOCK;
+					access |= LANDLOCK_ACCESS_FS_MAKE_CHAR;
+					break;
+				case 'R':
+					access |= LANDLOCK_ACCESS_FS_REFER;
+					break;
+				// clang-format on
+				default:
+					CMD_ERROR_0(
+						cmd,
+						"'perm' command to not support "
+						"'%c' permission flag",
+						*ptr);
+					_EXIT(out, -1);
+			}
+		}
+		g_flags = 0;
+		for (i = 2; i < argc; ++i) {
+			g_ret = glob(argv[i], g_flags, NULL, &g_results);
+			if (g_ret == GLOB_NOSPACE) {
+				LOG_ERROR("glob: no space");
+				_EXIT(out, -1);
+			} else if (g_ret == GLOB_ABORTED) {
+				LOG_ERROR("glob: aborted");
+				_EXIT(out, -1);
+			}
+			g_flags |= GLOB_APPEND;
+		}
+		for (i = 0; i < g_results.gl_pathc; ++i) {
+			if (landlock__add_path_rule_2(ruleset_fd, newroot_dir,
+						      g_results.gl_pathv[i],
+						      access) < 0) {
+				LOG_ERROR("landlock__add_path_rule_2");
+				_EXIT(out, -1);
+			}
+		}
+		globfree(&g_results);
 	} else {
 		CMD_ERROR_0(cmd, "command '%s' do not exists", argv0);
 		_EXIT(out, -1);
@@ -490,11 +571,10 @@ out:
 	return exit_code;
 }
 int
-profile__interpret(struct profile_t *profile,
-		   struct profile_data_t *prof_dt,
-		   const char *runtime_dir)
+profile__interpret(struct sandbox_t *sandbox, struct profile_data_t *prof_dt)
 {
 	int i;
+	struct profile_t *profile = sandbox->profile;
 	struct profile_command_list_t *cmd_list;
 	struct profile_command_t *cmd;
 
@@ -502,7 +582,7 @@ profile__interpret(struct profile_t *profile,
 		cmd_list = profile->cmd_list;
 		for (i = 0; i < cmd_list->count; ++i) {
 			cmd = cmd_list->cmds[i];
-			if (command_interpret(cmd, prof_dt, runtime_dir)) {
+			if (command_interpret(cmd, sandbox, prof_dt)) {
 				return -1;
 			}
 		}
