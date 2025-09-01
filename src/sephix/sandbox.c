@@ -53,6 +53,27 @@ profile__interpret(struct sandbox_t *sandbox, struct profile_data_t *prof_dt);
 static int pipe_fd[2];	// parent-child sync
 
 int
+_ack()
+{
+	char ch;
+	close(pipe_fd[1]);
+	if (read(pipe_fd[0], &ch, 1) < 0) {
+		PERROR("read");
+		return -1;
+	}
+	close(pipe_fd[0]);
+	return 0;
+}
+
+int
+_trigger()
+{
+	close(pipe_fd[0]);
+	close(pipe_fd[1]);
+	return 0;
+}
+
+int
 sandbox_entry(void *arg)
 {
 	char ch;
@@ -114,7 +135,6 @@ int
 sandbox_setup(void *arg)
 {
 	int exit_code = 0;
-	char ch;
 
 	pid_t child_pid;
 	char *child_stack;
@@ -123,12 +143,10 @@ sandbox_setup(void *arg)
 	struct profile_data_t *prof_dt = sandbox->prof_dt;
 
 	// wait parent map uid, gid on the new user namespace
-	close(pipe_fd[1]);
-	if (read(pipe_fd[0], &ch, 1) < 0) {
-		PERROR("read");
+	if (_ack() < 0) {
+		LOG_ERROR("_ack");
 		return -1;
 	}
-	close(pipe_fd[0]);
 
 	if (fs__prepare_new_root(sandbox) < 0) {
 		LOG_ERROR("fs__prepare_new_root: error");
@@ -305,8 +323,8 @@ sandbox__init(struct sandbox_t *sandbox)
 		LOG_ERROR("setup_userns_mapping: error");
 		_EXIT(out, -1);
 	}
-	close(pipe_fd[0]);
-	close(pipe_fd[1]);  // done writing, signal child
+	// done writing, signal child
+	_trigger();
 
 	PARENT_WAIT_AND_EXIT_AS_CHILD(child_pid, 1);
 
