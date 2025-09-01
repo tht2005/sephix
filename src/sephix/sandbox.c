@@ -144,7 +144,6 @@ sandbox_setup(void *arg)
 	if (profile__interpret(sandbox, prof_dt)) return -1;
 
 	sandbox->clone_flags = 0;
-	if (prof_dt->unshare_user) sandbox->clone_flags |= CLONE_NEWUSER;
 	if (prof_dt->unshare_pid) sandbox->clone_flags |= CLONE_NEWPID;
 	if (prof_dt->unshare_uts) sandbox->clone_flags |= CLONE_NEWUTS;
 	if (prof_dt->unshare_ipc) sandbox->clone_flags |= CLONE_NEWIPC;
@@ -418,11 +417,7 @@ command_interpret(struct profile_command_t *cmd,
 	argv1 = (argc > 1) ? argv[1] : NULL;
 	argv2 = (argc > 2) ? argv[2] : NULL;
 
-	if (strcmp(argv0, "unshare-user") == 0) {
-		MAX_ARGC_GUARD(2);
-		if (boolean_value_parse(&prof_dt->unshare_user, 1, argv1))
-			SHORT_CMD_SYNTAX_ERROR;
-	} else if (strcmp(argv0, "unshare-pid") == 0) {
+	if (strcmp(argv0, "unshare-pid") == 0) {
 		if (boolean_value_parse(&prof_dt->unshare_pid, 1, argv1))
 			SHORT_CMD_SYNTAX_ERROR;
 	} else if (strcmp(argv0, "unshare-net") == 0) {
@@ -443,8 +438,6 @@ command_interpret(struct profile_command_t *cmd,
 			SHORT_CMD_SYNTAX_ERROR;
 	} else if (strcmp(argv0, "unshare-all") == 0) {
 		MAX_ARGC_GUARD(2);
-		if (boolean_value_parse(&prof_dt->unshare_user, 1, argv1))
-			SHORT_CMD_SYNTAX_ERROR;
 		if (boolean_value_parse(&prof_dt->unshare_pid, 1, argv1))
 			SHORT_CMD_SYNTAX_ERROR;
 		if (boolean_value_parse(&prof_dt->unshare_net, 1, argv1))

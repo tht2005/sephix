@@ -27,7 +27,6 @@ profile_data_t__create()
 		return NULL;
 	}
 
-	prof_dt->unshare_user = 0;
 	prof_dt->unshare_pid = 0;
 	prof_dt->unshare_net = 0;
 	prof_dt->unshare_ipc = 0;
