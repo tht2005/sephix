@@ -571,6 +571,7 @@ command_interpret(struct profile_command_t *cmd,
 				_EXIT(out, -1);
 			}
 		}
+		// TODO: Move to out
 		globfree(&g_results);
 	} else {
 		CMD_ERROR_0(cmd, "command '%s' do not exists", argv0);
