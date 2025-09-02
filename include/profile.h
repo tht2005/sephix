@@ -1,6 +1,13 @@
 #ifndef __PROFILE_H
 #define __PROFILE_H
 
+#if __has_include(<asm-generic/unistd.h>)
+#include <asm-generic/unistd.h>
+#endif
+#ifndef __NR_syscalls
+#define __NR_syscalls 1024
+#endif
+
 struct profile_t {
 	char *filename;
 	struct profile_command_list_t *cmd_list;
@@ -17,6 +24,9 @@ struct profile_data_t {
 
 	char *hostname;
 	char *domainname;
+
+	int syscall_default;
+	int syscall_allow[__NR_syscalls];
 };
 struct profile_data_t *
 profile_data_t__create();

@@ -9,6 +9,7 @@
 #include <linux/landlock.h>
 #include <linux/prctl.h>
 #include <sched.h>
+#include <seccomp.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -101,6 +102,12 @@ sandbox_entry(void *arg)
 
 	if (fs__chroot(sandbox) < 0) {
 		LOG_ERROR("fs__chroot: error");
+		return -1;
+	}
+
+	// filter system calls
+	if (seccomp__init(sandbox) < 0) {
+		LOG_ERROR("seccomp__init");
 		return -1;
 	}
 
@@ -400,6 +407,7 @@ command_interpret(struct profile_command_t *cmd,
 		  struct profile_data_t *prof_dt)
 {
 	int exit_code = 0;
+	int nr;
 
 	int i;
 	int argc;
@@ -571,7 +579,47 @@ command_interpret(struct profile_command_t *cmd,
 				_EXIT(out, -1);
 			}
 		}
+		// TODO: Move to out
 		globfree(&g_results);
+	} else if(strcmp(argv0, "seccomp.default") == 0) {
+		ARGC_GUARD(2, 2);
+		if (strcmp(argv1, "allow") == 0) {
+			prof_dt->syscall_default = SCMP_ACT_ALLOW;
+		} else if (strcmp(argv1, "kill") == 0) {
+			prof_dt->syscall_default = SCMP_ACT_KILL;
+		} else if (strcmp(argv1, "kill-process") == 0) {
+			prof_dt->syscall_default = SCMP_ACT_KILL_PROCESS;
+		} else {
+			CMD_ERROR_0(cmd, "invalid argument %s", argv1);
+		}
+	} else if (strcmp(argv0, "seccomp.allow") == 0) {
+		MIN_ARGC_GUARD(2);
+		for (i = 1; i < argc; ++i) {
+			nr = seccomp_syscall_resolve_name(argv[i]);
+			if (nr == __NR_SCMP_ERROR) {
+				CMD_ERROR_1(cmd, "unknown syscall '%s'", argv[i]); 
+				_EXIT(out, -1);
+			} else if (nr < 0) {
+				CMD_ERROR_1(cmd, "syscall '%s' not supported on this arch", argv[i]); 
+			} else {
+				assert(nr < __NR_syscalls);
+				prof_dt->syscall_allow[nr] = 1;
+			}
+		}
+	} else if (strcmp(argv0, "seccomp.deny") == 0) {
+		MIN_ARGC_GUARD(2);
+		for (i = 1; i < argc; ++i) {
+			nr = seccomp_syscall_resolve_name(argv[i]);
+			if (nr == __NR_SCMP_ERROR) {
+				CMD_ERROR_1(cmd, "unknown syscall '%s'", argv[i]); 
+				_EXIT(out, -1);
+			} else if (nr < 0) {
+				CMD_ERROR_1(cmd, "syscall '%s' not supported on this arch", argv[i]); 
+			} else {
+				assert(nr < __NR_syscalls);
+				prof_dt->syscall_allow[nr] = 0;
+			}
+		}
 	} else {
 		CMD_ERROR_0(cmd, "command '%s' do not exists", argv0);
 		_EXIT(out, -1);

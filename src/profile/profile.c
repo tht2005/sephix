@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <dirent.h>
 #include <pwd.h>
+#include <seccomp.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,6 +44,11 @@ profile_data_t__create()
 		PERROR("strdup");
 		return NULL;
 	}
+
+	// if user do not use seccomp, they'll want this
+	prof_dt->syscall_default = SCMP_ACT_ALLOW;
+	memset(prof_dt->syscall_allow, -1, sizeof(prof_dt->syscall_allow));
+
 	return prof_dt;
 }
 void
@@ -202,13 +208,13 @@ get_filepath_from_profile_name(char **_res, const char *profile_name)
 			_EXIT(out, -1);
 		}
 
-		if (asprintf(&usr_filepath, "%s/.config/sephix/%s",
-			     pw->pw_dir, profile_name) < 0) {
+		if (asprintf(&usr_filepath, "%s/.config/sephix/%s", pw->pw_dir,
+			     profile_name) < 0) {
 			PERROR("asprintf");
 			_EXIT(out, -1);
 		}
-		if (asprintf(&etc_filepath, SYSCONF_DIR "/%s",
-			     profile_name) < 0) {
+		if (asprintf(&etc_filepath, SYSCONF_DIR "/%s", profile_name) <
+		    0) {
 			PERROR("asprintf");
 			_EXIT(out, -1);
 		}
