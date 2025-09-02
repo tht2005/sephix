@@ -27,6 +27,7 @@ static struct landlock_ruleset_attr ruleset_attr = {
 		LANDLOCK_ACCESS_FS_MAKE_FIFO |
 		LANDLOCK_ACCESS_FS_MAKE_BLOCK |
 		LANDLOCK_ACCESS_FS_MAKE_SYM |
+
 		LANDLOCK_ACCESS_FS_REFER,
 	.handled_access_net = 0,
 	.scoped = 0,
