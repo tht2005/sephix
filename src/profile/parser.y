@@ -79,11 +79,13 @@ string_list : string
 		string_list_t__add_arg(cmd, $1);
 		$$ = cmd;
 	}
-	| WHITESPACE string
+	| string_list WHITESPACE
 	{
-		struct string_list_t *cmd = string_list_t__create();
-		string_list_t__add_arg(cmd, $2);
-		$$ = cmd;
+		$$ = $1;
+	}
+	| WHITESPACE string_list
+	{
+		$$ = $2;
 	}
 	| string_list WHITESPACE string
 	{

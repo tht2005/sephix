@@ -14,6 +14,9 @@
 %}
 
 %%
+
+#[^\n]*			;
+
 [ \t]+			{
 	return WHITESPACE;
 }
