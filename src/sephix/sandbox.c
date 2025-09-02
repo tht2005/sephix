@@ -422,6 +422,7 @@ command_interpret(struct profile_command_t *cmd,
 	int ruleset_fd = sandbox->ruleset_fd;
 	char *runtime_dir = sandbox->runtime_dir;
 	char *newroot_dir = NULL;
+	const char *opt;
 
 	__u64 access;
 
@@ -619,6 +620,17 @@ command_interpret(struct profile_command_t *cmd,
 				assert(nr < __NR_syscalls);
 				prof_dt->syscall_allow[nr] = 0;
 			}
+		}
+	} else if (strcmp(argv0, "tmpfs") == 0) {
+		ARGC_GUARD(2, 3);
+		if (argc == 2) {
+			opt = "size=128M";
+		} else {
+			opt = argv2;
+		}
+		if (mount2("tmpfs", newroot_dir, argv1, "tmpfs", 0, opt) < 0) {
+			CMD_ERROR_0(cmd, "tmpfs: %s", strerror(errno));
+			_EXIT(out, -1);
 		}
 	} else {
 		CMD_ERROR_0(cmd, "command '%s' do not exists", argv0);
