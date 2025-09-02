@@ -39,4 +39,7 @@ fs__chroot(struct sandbox_t *sandbox);
 int
 sandbox__init(struct sandbox_t *sandbox);
 
+int
+seccomp__init(struct sandbox_t *sandbox);
+
 #endif
