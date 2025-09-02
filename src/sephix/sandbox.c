@@ -111,10 +111,6 @@ sandbox_entry(void *arg)
 		return -1;
 	}
 
-	if ((sandbox->clone_flags & CLONE_NEWUSER) == 0) {
-		// [TODO] return to previous user namespace
-	}
-
 	if (landlock__apply_ruleset(sandbox->ruleset_fd) < 0) {
 		PERROR("landlock__apply_ruleset");
 		return -1;
