@@ -186,7 +186,6 @@ get_filepath_from_profile_name(char **_res, const char *profile_name)
 	int exit_code = 0;
 	char *res;
 	struct passwd *pw;  // must not free this
-	char *usr_filepath_local = NULL;
 	char *usr_filepath = NULL;
 	char *etc_filepath = NULL;
 
@@ -203,26 +202,18 @@ get_filepath_from_profile_name(char **_res, const char *profile_name)
 			_EXIT(out, -1);
 		}
 
-		if (asprintf(&usr_filepath_local, "%s/.config/sephix/%s.local",
+		if (asprintf(&usr_filepath, "%s/.config/sephix/%s",
 			     pw->pw_dir, profile_name) < 0) {
 			PERROR("asprintf");
 			_EXIT(out, -1);
 		}
-		if (asprintf(&usr_filepath, "%s/.config/sephix/%s.profile",
-			     pw->pw_dir, profile_name) < 0) {
-			PERROR("asprintf");
-			_EXIT(out, -1);
-		}
-		if (asprintf(&etc_filepath, SYSCONF_DIR "/%s.profile",
+		if (asprintf(&etc_filepath, SYSCONF_DIR "/%s",
 			     profile_name) < 0) {
 			PERROR("asprintf");
 			_EXIT(out, -1);
 		}
 
-		if (is_reg_file(usr_filepath_local) == 0) {
-			res = usr_filepath_local;
-			usr_filepath_local = NULL;
-		} else if (is_reg_file(usr_filepath) == 0) {
+		if (is_reg_file(usr_filepath) == 0) {
 			res = usr_filepath;
 			usr_filepath = NULL;
 		} else if (is_reg_file(etc_filepath) == 0) {
@@ -238,7 +229,6 @@ get_filepath_from_profile_name(char **_res, const char *profile_name)
 	}
 	*_res = res;
 out:
-	if (usr_filepath_local) free(usr_filepath_local);
 	if (usr_filepath) free(usr_filepath);
 	if (etc_filepath) free(etc_filepath);
 	return exit_code;
