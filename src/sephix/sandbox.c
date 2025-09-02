@@ -111,6 +111,12 @@ sandbox_entry(void *arg)
 		return -1;
 	}
 
+	// TODO: make an option for no_new_privs?
+	if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) < 0) {
+		PERROR("set_no_new_privs");
+		return -1;
+	}
+
 	if (landlock__apply_ruleset(sandbox->ruleset_fd) < 0) {
 		PERROR("landlock__apply_ruleset");
 		return -1;
