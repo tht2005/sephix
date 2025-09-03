@@ -55,6 +55,8 @@ enum ACTION {
 	ACTION_SECCOMP = 1 << 2,
 	ACTION_CAPS = 1 << 3,
 	ACTION_PERM = 1 << 4,
+
+	ACTION_ALL = ((1 << 5) - 1)
 };
 int
 command_interpret(struct profile_command_t *cmd,
@@ -114,7 +116,7 @@ sandbox_entry(void *arg)
 		return -1;
 	}
 
-	if (profile__interpret(sandbox, ACTION_FS | ACTION_SECCOMP | ACTION_PERM | ACTION_CAPS) < 0) {
+	if (profile__interpret(sandbox, ACTION_ALL & ~(ACTION_UNSHARE)) < 0) {
 		return -1;
 	}
 
@@ -547,7 +549,9 @@ command_interpret(struct profile_command_t *cmd,
 		ARGC_GUARD(2, 2);
 		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_FS);
 		if (prof_dt->unshare_pid == 0) {
-			CMD_ERROR_0(cmd, "proc: to mount proc file system you must unshare-pid first");
+			CMD_ERROR_0(cmd,
+				    "proc: to mount proc file system you must "
+				    "unshare-pid first");
 			_EXIT(out, -1);
 		}
 		if (mount2("proc", newroot_dir, argv1, "proc", 0, NULL) < 0) {
