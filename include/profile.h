@@ -62,6 +62,8 @@ struct string_list_t *
 string_list_t__create();
 int
 string_list_t__add_arg(struct string_list_t *slist, char *arg);
+void
+string_list_t__free(struct string_list_t *slist);
 
 struct profile_command_t *
 profile_command_t__create(const char *filename,

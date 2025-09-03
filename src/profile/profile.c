@@ -102,6 +102,15 @@ string_list_t__add_arg(struct string_list_t *slist, char *arg)
 	slist->argv[slist->argc++] = arg;
 	return 0;
 }
+void
+string_list_t__free(struct string_list_t *slist)
+{
+	int i;
+	for (i = 0; i < slist->argc; ++i)
+		free(slist->argv[i]);
+	free(slist->argv);
+	free(slist);
+}
 
 struct profile_command_t *
 profile_command_t__create(const char *filename,
@@ -170,10 +179,7 @@ profile_command_list_t__free(struct profile_command_list_t *cmd_list)
 	struct profile_command_t *cmd;
 	for (i = 0; i < cmd_list->count; ++i) {
 		cmd = cmd_list->cmds[i];
-		for (j = 0; j < cmd->slist->argc; ++j)
-			free(cmd->slist->argv[j]);
-		free(cmd->slist->argv);
-		free(cmd->slist);
+		string_list_t__free(cmd->slist);
 		free(cmd);
 	}
 	free(cmd_list);
