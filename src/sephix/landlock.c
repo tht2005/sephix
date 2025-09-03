@@ -158,6 +158,8 @@ landlock__parse_perm_flag(__u64 *_access, char c)
 		case 'c':
 			access |= LANDLOCK_ACCESS_FS_MAKE_REG;
 			access |= LANDLOCK_ACCESS_FS_MAKE_DIR;
+			break;
+		case 'C':
 			access |= LANDLOCK_ACCESS_FS_MAKE_SOCK;
 			access |= LANDLOCK_ACCESS_FS_MAKE_FIFO;
 			access |= LANDLOCK_ACCESS_FS_MAKE_SYM;
