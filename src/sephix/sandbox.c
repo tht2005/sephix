@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/capability.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
 #include <sys/wait.h>
@@ -108,6 +109,11 @@ sandbox_entry(void *arg)
 	// filter system calls
 	if (seccomp__init(sandbox) < 0) {
 		LOG_ERROR("seccomp__init");
+		return -1;
+	}
+
+	if (caps_init(sandbox) < 0) {
+		LOG_ERROR("caps_init");
 		return -1;
 	}
 
@@ -417,6 +423,8 @@ command_interpret(struct profile_command_t *cmd,
 	char *argv0, *argv1, *argv2;
 	char **argv;
 
+	cap_value_t cap;
+
 	int g_ret;
 	int g_flags;
 	glob_t g_results;
@@ -425,7 +433,6 @@ command_interpret(struct profile_command_t *cmd,
 	char *runtime_dir = sandbox->runtime_dir;
 	char *newroot_dir = NULL;
 	const char *opt;
-
 	__u64 access;
 
 	if (asprintf(&newroot_dir, "%s/mnt", runtime_dir) < 0) {
@@ -584,7 +591,7 @@ command_interpret(struct profile_command_t *cmd,
 		}
 		// TODO: Move to out
 		globfree(&g_results);
-	} else if(strcmp(argv0, "seccomp.default") == 0) {
+	} else if (strcmp(argv0, "seccomp.default") == 0) {
 		ARGC_GUARD(2, 2);
 		if (strcmp(argv1, "allow") == 0) {
 			prof_dt->syscall_default = SCMP_ACT_ALLOW;
@@ -600,10 +607,14 @@ command_interpret(struct profile_command_t *cmd,
 		for (i = 1; i < argc; ++i) {
 			nr = seccomp_syscall_resolve_name(argv[i]);
 			if (nr == __NR_SCMP_ERROR) {
-				CMD_ERROR_1(cmd, "unknown syscall '%s'", argv[i]); 
+				CMD_ERROR_1(cmd, "unknown syscall '%s'",
+					    argv[i]);
 				_EXIT(out, -1);
 			} else if (nr < 0) {
-				CMD_ERROR_1(cmd, "syscall '%s' not supported on this arch", argv[i]); 
+				CMD_ERROR_1(cmd,
+					    "syscall '%s' not supported on "
+					    "this arch",
+					    argv[i]);
 			} else {
 				assert(nr < NUM_SYSCALLS);
 				prof_dt->syscall_allow[nr] = 1;
@@ -614,10 +625,14 @@ command_interpret(struct profile_command_t *cmd,
 		for (i = 1; i < argc; ++i) {
 			nr = seccomp_syscall_resolve_name(argv[i]);
 			if (nr == __NR_SCMP_ERROR) {
-				CMD_ERROR_1(cmd, "unknown syscall '%s'", argv[i]); 
+				CMD_ERROR_1(cmd, "unknown syscall '%s'",
+					    argv[i]);
 				_EXIT(out, -1);
 			} else if (nr < 0) {
-				CMD_ERROR_1(cmd, "syscall '%s' not supported on this arch", argv[i]); 
+				CMD_ERROR_1(cmd,
+					    "syscall '%s' not supported on "
+					    "this arch",
+					    argv[i]);
 			} else {
 				assert(nr < NUM_SYSCALLS);
 				prof_dt->syscall_allow[nr] = 0;
@@ -633,6 +648,30 @@ command_interpret(struct profile_command_t *cmd,
 		if (mount2("tmpfs", newroot_dir, argv1, "tmpfs", 0, opt) < 0) {
 			CMD_ERROR_0(cmd, "tmpfs: %s", strerror(errno));
 			_EXIT(out, -1);
+		}
+	} else if (strcmp(argv0, "caps.drop-all") == 0) {
+		ARGC_GUARD(1, 1);
+		memset(prof_dt->caps_keep, 0,
+		       prof_dt->ncap * sizeof(prof_dt->caps_keep[0]));
+	} else if (strcmp(argv0, "caps.keep") == 0) {
+		MIN_ARGC_GUARD(2);
+		for (i = 1; i < argc; ++i) {
+			if (cap_from_name(argv[i], &cap) < 0) {
+				CMD_ERROR_1(cmd, "unknown capability: %s",
+					    argv[i]);
+				_EXIT(out, -1);
+			}
+			prof_dt->caps_keep[cap] = 1;
+		}
+	} else if (strcmp(argv0, "caps.drop") == 0) {
+		MIN_ARGC_GUARD(2);
+		for (i = 1; i < argc; ++i) {
+			if (cap_from_name(argv[i], &cap) < 0) {
+				CMD_ERROR_1(cmd, "unknown capability: %s",
+					    argv[i]);
+				_EXIT(out, -1);
+			}
+			prof_dt->caps_keep[cap] = 0;
 		}
 	} else {
 		CMD_ERROR_0(cmd, "command '%s' do not exists", argv0);

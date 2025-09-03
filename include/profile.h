@@ -29,6 +29,9 @@ struct profile_data_t {
 
 	int syscall_default;
 	int syscall_allow[NUM_SYSCALLS];
+
+	int ncap;
+	int *caps_keep;
 };
 struct profile_data_t *
 profile_data_t__create();
