@@ -309,7 +309,6 @@ sandbox__init(struct sandbox_t *sandbox)
 		LOG_ERROR("fs__create_public_metadata: error");
 		_EXIT(out, -1);
 	}
-	// [TODO] parent help child restore user namespace if needed
 
 	// switch to sandbox_setup
 	if (pipe(pipe_fd) < 0) {
@@ -589,8 +588,7 @@ command_interpret(struct profile_command_t *cmd,
 				_EXIT(out, -1);
 			}
 		}
-		// TODO: Move to out
-		globfree(&g_results);
+		globfree(&g_results);  // TODO: Move to out
 	} else if (strcmp(argv0, "seccomp.default") == 0) {
 		ARGC_GUARD(2, 2);
 		if (strcmp(argv1, "allow") == 0) {
