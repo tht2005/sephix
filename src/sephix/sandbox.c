@@ -543,6 +543,17 @@ command_interpret(struct profile_command_t *cmd,
 			CMD_ERROR_0(cmd, "tmpfs: %s", strerror(errno));
 			_EXIT(out, -1);
 		}
+	} else if (strcmp(argv0, "proc") == 0) {
+		ARGC_GUARD(2, 2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_FS);
+		if (prof_dt->unshare_pid == 0) {
+			CMD_ERROR_0(cmd, "proc: to mount proc file system you must unshare-pid first");
+			_EXIT(out, -1);
+		}
+		if (mount2("proc", newroot_dir, argv1, "proc", 0, NULL) < 0) {
+			CMD_ERROR_0(cmd, "proc: %s", strerror(errno));
+			_EXIT(out, -1);
+		}
 	} else if (strcmp(argv0, "perm") == 0) {
 		MIN_ARGC_GUARD(3);
 		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_PERM);
