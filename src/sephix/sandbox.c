@@ -531,41 +531,11 @@ command_interpret(struct profile_command_t *cmd,
 		MIN_ARGC_GUARD(3);
 		access = 0;
 		for (ptr = argv1; *ptr; ++ptr) {
-			switch (*ptr) {
-					// clang-format off
-				case 'r':
-					access |= LANDLOCK_ACCESS_FS_READ_FILE;
-					access |= LANDLOCK_ACCESS_FS_READ_DIR;
-					break;
-				case 'w':
-					access |= LANDLOCK_ACCESS_FS_WRITE_FILE;
-					access |= LANDLOCK_ACCESS_FS_TRUNCATE;
-					access |= LANDLOCK_ACCESS_FS_REMOVE_FILE;
-					access |= LANDLOCK_ACCESS_FS_REMOVE_DIR;
-					break;
-				case 'x':
-					access |= LANDLOCK_ACCESS_FS_EXECUTE;
-					break;
-				case 'c':
-					access |= LANDLOCK_ACCESS_FS_MAKE_REG;
-					access |= LANDLOCK_ACCESS_FS_MAKE_DIR;
-					access |= LANDLOCK_ACCESS_FS_MAKE_SOCK;
-					access |= LANDLOCK_ACCESS_FS_MAKE_FIFO;
-					access |= LANDLOCK_ACCESS_FS_MAKE_SYM;
-					access |= LANDLOCK_ACCESS_FS_MAKE_BLOCK;
-					access |= LANDLOCK_ACCESS_FS_MAKE_CHAR;
-					break;
-				case 'R':
-					access |= LANDLOCK_ACCESS_FS_REFER;
-					break;
-				// clang-format on
-				default:
-					CMD_ERROR_0(
-						cmd,
-						"'perm' command to not support "
-						"'%c' permission flag",
-						*ptr);
-					_EXIT(out, -1);
+			if (landlock__parse_perm_flag(&access, *ptr) < 0) {
+				CMD_ERROR_0(cmd,
+					    "'perm' command to not support "
+					    "'%c' permission flag",
+					    *ptr);
 			}
 		}
 		g_flags = 0;

@@ -136,3 +136,40 @@ landlock__apply_ruleset(int ruleset_fd)
 	}
 	return 0;
 }
+
+int
+landlock__parse_perm_flag(__u64 *_access, char c)
+{
+	__u64 access = 0;
+	switch (c) {
+		case 'r':
+			access |= LANDLOCK_ACCESS_FS_READ_FILE;
+			access |= LANDLOCK_ACCESS_FS_READ_DIR;
+			break;
+		case 'w':
+			access |= LANDLOCK_ACCESS_FS_WRITE_FILE;
+			access |= LANDLOCK_ACCESS_FS_TRUNCATE;
+			access |= LANDLOCK_ACCESS_FS_REMOVE_FILE;
+			access |= LANDLOCK_ACCESS_FS_REMOVE_DIR;
+			break;
+		case 'x':
+			access |= LANDLOCK_ACCESS_FS_EXECUTE;
+			break;
+		case 'c':
+			access |= LANDLOCK_ACCESS_FS_MAKE_REG;
+			access |= LANDLOCK_ACCESS_FS_MAKE_DIR;
+			access |= LANDLOCK_ACCESS_FS_MAKE_SOCK;
+			access |= LANDLOCK_ACCESS_FS_MAKE_FIFO;
+			access |= LANDLOCK_ACCESS_FS_MAKE_SYM;
+			access |= LANDLOCK_ACCESS_FS_MAKE_BLOCK;
+			access |= LANDLOCK_ACCESS_FS_MAKE_CHAR;
+			break;
+		case 'R':
+			access |= LANDLOCK_ACCESS_FS_REFER;
+			break;
+		default:
+			return -1;
+	}
+	*_access |= access;
+	return 0;
+}
