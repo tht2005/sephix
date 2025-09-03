@@ -14,7 +14,7 @@ struct sandbox_t {
 	struct profile_t *profile;
 	struct profile_data_t *prof_dt;
 
-	int ruleset_fd; //landlock
+	int ruleset_fd;	 // landlock
 
 	const char *name;
 	char *runtime_dir;
@@ -41,5 +41,8 @@ sandbox__init(struct sandbox_t *sandbox);
 
 int
 seccomp__init(struct sandbox_t *sandbox);
+
+int
+caps_init(struct sandbox_t *sandbox);
 
 #endif

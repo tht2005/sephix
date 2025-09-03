@@ -13,6 +13,7 @@ find_package(BISON 3.8.2 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(CONFUSE REQUIRED libconfuse)
 pkg_check_modules(SECCOMP REQUIRED libseccomp)
+pkg_check_modules(LIBCAP REQUIRED libcap)
 
 # Configure
 
@@ -48,6 +49,7 @@ add_executable(sephix
 target_include_directories(sephix
 	PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_BINARY_DIR}/include
 	PRIVATE ${FLEX_INCLUDE_DIRS} ${CONFUSE_INCLUDE_DIRS} ${SECCOMP_INCLUDE_DIRS}
+	PRIVATE ${LIBCAP_INCLUDE_DIRS}
 )
 
 target_compile_definitions(sephix
@@ -61,4 +63,5 @@ endif()
 
 target_link_libraries(sephix
 	PRIVATE ${FLEX_LIBRARIES} ${CONFUSE_LIBRARIES} ${SECCOMP_LIBRARIES}
+	PRIVATE ${LIBCAP_LIBRARIES}
 )

@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/capability.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -49,6 +50,14 @@ profile_data_t__create()
 	prof_dt->syscall_default = SCMP_ACT_ALLOW;
 	memset(prof_dt->syscall_allow, -1, sizeof(prof_dt->syscall_allow));
 
+	prof_dt->ncap = cap_max_bits();
+	prof_dt->caps_keep = (int *)malloc(prof_dt->ncap * sizeof(int));
+	if (prof_dt->caps_keep == NULL) {
+		PERROR("malloc");
+		return NULL;
+	}
+	memset(prof_dt->caps_keep, -1, prof_dt->ncap * sizeof(int));
+
 	return prof_dt;
 }
 void
@@ -56,6 +65,7 @@ profile_data_t__free(struct profile_data_t *prof_dt)
 {
 	free(prof_dt->hostname);
 	free(prof_dt->domainname);
+	free(prof_dt->caps_keep);
 	free(prof_dt);
 }
 
