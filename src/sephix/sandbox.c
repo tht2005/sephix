@@ -49,8 +49,19 @@
 		}                                                              \
 	} while (0)
 
+enum ACTION {
+	ACTION_UNSHARE = 1 << 0,
+	ACTION_FS = 1 << 1,
+	ACTION_SECCOMP = 1 << 2,
+	ACTION_CAPS = 1 << 3,
+	ACTION_PERM = 1 << 4,
+};
 int
-profile__interpret(struct sandbox_t *sandbox, struct profile_data_t *prof_dt);
+command_interpret(struct profile_command_t *cmd,
+		  struct sandbox_t *sandbox,
+		  int actions_flags);
+int
+profile__interpret(struct sandbox_t *sandbox, int actions_flags);
 
 static int pipe_fd[2];	// parent-child sync
 
@@ -78,9 +89,34 @@ _trigger()
 int
 sandbox_entry(void *arg)
 {
+	int i;
 	char ch;
+
 	pid_t child_pid;
+
 	struct sandbox_t *sandbox = (struct sandbox_t *)arg;
+	struct profile_data_t *prof_dt = sandbox->prof_dt;
+
+	// wait parent map uid, gid on the new user namespace
+	if (_ack() < 0) {
+		LOG_ERROR("_ack");
+		return -1;
+	}
+
+	if (fs__prepare_new_root(sandbox) < 0) {
+		LOG_ERROR("fs__prepare_new_root: error");
+		return -1;
+	}
+
+	sandbox->ruleset_fd = landlock__create_ruleset_fd();
+	if (sandbox->ruleset_fd < 0) {
+		LOG_ERROR("landlock__create_ruleset_fd");
+		return -1;
+	}
+
+	if (profile__interpret(sandbox, ACTION_FS | ACTION_SECCOMP | ACTION_PERM | ACTION_CAPS) < 0) {
+		return -1;
+	}
 
 	if (uts__init(sandbox) < 0) {
 		LOG_ERROR("uts__init: error");
@@ -144,66 +180,6 @@ sandbox_entry(void *arg)
 	}
 	// never reach here
 	assert(0);
-}
-
-int
-sandbox_setup(void *arg)
-{
-	int exit_code = 0;
-
-	pid_t child_pid;
-	char *child_stack;
-
-	struct sandbox_t *sandbox = (struct sandbox_t *)arg;
-	struct profile_data_t *prof_dt = sandbox->prof_dt;
-
-	// wait parent map uid, gid on the new user namespace
-	if (_ack() < 0) {
-		LOG_ERROR("_ack");
-		return -1;
-	}
-
-	if (fs__prepare_new_root(sandbox) < 0) {
-		LOG_ERROR("fs__prepare_new_root: error");
-		return -1;
-	}
-
-	sandbox->ruleset_fd = landlock__create_ruleset_fd();
-	if (sandbox->ruleset_fd < 0) {
-		LOG_ERROR("landlock__create_ruleset_fd");
-		return -1;
-	}
-
-	if (profile__interpret(sandbox, prof_dt)) return -1;
-
-	sandbox->clone_flags = 0;
-	if (prof_dt->unshare_pid) sandbox->clone_flags |= CLONE_NEWPID;
-	if (prof_dt->unshare_uts) sandbox->clone_flags |= CLONE_NEWUTS;
-	if (prof_dt->unshare_ipc) sandbox->clone_flags |= CLONE_NEWIPC;
-	if (prof_dt->unshare_net) sandbox->clone_flags |= CLONE_NEWNET;
-	if (prof_dt->unshare_cgroup) sandbox->clone_flags |= CLONE_NEWCGROUP;
-
-	// switch to sandbox_entry
-	child_stack = mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE,
-			   MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
-	if (child_stack == MAP_FAILED) {
-		PERROR("mmap");
-		_EXIT(out, -1);
-	}
-	child_pid = clone(sandbox_entry, child_stack + STACK_SIZE,
-			  sandbox->clone_flags | SIGCHLD, sandbox);
-	if (child_pid < 0) {
-		PERROR("clone");
-		_EXIT(out, -1);
-	}
-	munmap(child_stack, STACK_SIZE);
-	prctl(PR_SET_PDEATHSIG,
-	      SIGKILL);	 // after parent die, send SIGKILL to child
-
-	PARENT_WAIT_AND_EXIT_AS_CHILD(child_pid, 0);
-
-out:
-	return exit_code;
 }
 
 int
@@ -304,6 +280,16 @@ sandbox__init(struct sandbox_t *sandbox)
 	pid_t child_pid;
 	char *child_stack;
 	int child_status;
+	struct profile_data_t *prof_dt = sandbox->prof_dt;
+
+	if (profile__interpret(sandbox, ACTION_UNSHARE)) return -1;
+
+	sandbox->clone_flags = CLONE_NEWUSER | CLONE_NEWNS;
+	if (prof_dt->unshare_pid) sandbox->clone_flags |= CLONE_NEWPID;
+	if (prof_dt->unshare_uts) sandbox->clone_flags |= CLONE_NEWUTS;
+	if (prof_dt->unshare_ipc) sandbox->clone_flags |= CLONE_NEWIPC;
+	if (prof_dt->unshare_net) sandbox->clone_flags |= CLONE_NEWNET;
+	if (prof_dt->unshare_cgroup) sandbox->clone_flags |= CLONE_NEWCGROUP;
 
 	if (fs__create_public_metadata(sandbox) < 0) {
 		LOG_ERROR("fs__create_public_metadata: error");
@@ -322,8 +308,8 @@ sandbox__init(struct sandbox_t *sandbox)
 		_EXIT(out, -1);
 	}
 
-	child_pid = clone(sandbox_setup, child_stack + STACK_SIZE,
-			  CLONE_NEWNS | CLONE_NEWUSER | SIGCHLD, sandbox);
+	child_pid = clone(sandbox_entry, child_stack + STACK_SIZE,
+			  sandbox->clone_flags | SIGCHLD, sandbox);
 	if (child_pid < 0) {
 		PERROR("clone");
 		_EXIT(out, -1);
@@ -408,11 +394,19 @@ boolean_value_parse(int *variable, int def, const char *str)
 		_EXIT(out, -1);                   \
 	} while (0)
 
+#define ACTION_FLAGS_GUARD(_out, _flags, _flag)           \
+	do {                                              \
+		if (((_flags) & (_flag)) == 0) goto _out; \
+	} while (0)
+
 int
 command_interpret(struct profile_command_t *cmd,
 		  struct sandbox_t *sandbox,
-		  struct profile_data_t *prof_dt)
+		  int actions_flags)
 {
+	struct profile_data_t *prof_dt = sandbox->prof_dt;
+	int ruleset_fd = sandbox->ruleset_fd;
+
 	int exit_code = 0;
 	int nr;
 
@@ -428,7 +422,6 @@ command_interpret(struct profile_command_t *cmd,
 	int g_flags;
 	glob_t g_results;
 
-	int ruleset_fd = sandbox->ruleset_fd;
 	char *runtime_dir = sandbox->runtime_dir;
 	char *newroot_dir = NULL;
 	const char *opt;
@@ -453,26 +446,33 @@ command_interpret(struct profile_command_t *cmd,
 	argv2 = (argc > 2) ? argv[2] : NULL;
 
 	if (strcmp(argv0, "unshare-pid") == 0) {
+		MAX_ARGC_GUARD(2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_UNSHARE);
 		if (boolean_value_parse(&prof_dt->unshare_pid, 1, argv1))
 			SHORT_CMD_SYNTAX_ERROR;
 	} else if (strcmp(argv0, "unshare-net") == 0) {
 		MAX_ARGC_GUARD(2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_UNSHARE);
 		if (boolean_value_parse(&prof_dt->unshare_net, 1, argv1))
 			SHORT_CMD_SYNTAX_ERROR;
 	} else if (strcmp(argv0, "unshare-ipc") == 0) {
 		MAX_ARGC_GUARD(2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_UNSHARE);
 		if (boolean_value_parse(&prof_dt->unshare_ipc, 1, argv1))
 			SHORT_CMD_SYNTAX_ERROR;
 	} else if (strcmp(argv0, "unshare-uts") == 0) {
 		MAX_ARGC_GUARD(2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_UNSHARE);
 		if (boolean_value_parse(&prof_dt->unshare_uts, 1, argv1))
 			SHORT_CMD_SYNTAX_ERROR;
 	} else if (strcmp(argv0, "unshare-cgroup") == 0) {
 		MAX_ARGC_GUARD(2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_UNSHARE);
 		if (boolean_value_parse(&prof_dt->unshare_cgroup, 1, argv1))
 			SHORT_CMD_SYNTAX_ERROR;
 	} else if (strcmp(argv0, "unshare-all") == 0) {
 		MAX_ARGC_GUARD(2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_UNSHARE);
 		if (boolean_value_parse(&prof_dt->unshare_pid, 1, argv1))
 			SHORT_CMD_SYNTAX_ERROR;
 		if (boolean_value_parse(&prof_dt->unshare_net, 1, argv1))
@@ -483,24 +483,9 @@ command_interpret(struct profile_command_t *cmd,
 			SHORT_CMD_SYNTAX_ERROR;
 		if (boolean_value_parse(&prof_dt->unshare_cgroup, 1, argv1))
 			SHORT_CMD_SYNTAX_ERROR;
-	} else if (strcmp(argv0, "bind") == 0) {
-		ARGC_GUARD(3, 3);
-		if (mount2(argv1, newroot_dir, argv2, NULL, MS_BIND | MS_REC,
-			   NULL) < 0) {
-			CMD_ERROR_0(cmd, "can not mount '%s' -> '%s': %s\n",
-				    argv1, argv2, strerror(errno));
-			_EXIT(out, -1);
-		}
-
-	} else if (strcmp(argv0, "mkdir") == 0) {
-		ARGC_GUARD(2, 2);
-		if (mkdir2(newroot_dir, argv1, 0755) < 0 && errno != EEXIST) {
-			CMD_ERROR_0(cmd, "can not create directory '%s': %s\n",
-				    argv1, strerror(errno));
-			_EXIT(out, -1);
-		}
 	} else if (strcmp(argv0, "hostname") == 0) {
 		ARGC_GUARD(2, 2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_UNSHARE);
 		if (!prof_dt->unshare_uts) {
 			CMD_ERROR_0(cmd,
 				    "unshare-uts must be enabled before using "
@@ -515,6 +500,7 @@ command_interpret(struct profile_command_t *cmd,
 		}
 	} else if (strcmp(argv0, "domainname") == 0) {
 		ARGC_GUARD(2, 2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_UNSHARE);
 		if (!prof_dt->unshare_uts) {
 			CMD_ERROR_0(cmd,
 				    "unshare-uts must be enabled before using "
@@ -527,8 +513,39 @@ command_interpret(struct profile_command_t *cmd,
 			PERROR("strdup");
 			_EXIT(out, -1);
 		}
+	} else if (strcmp(argv0, "bind") == 0) {
+		ARGC_GUARD(3, 3);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_FS);
+		if (mount2(argv1, newroot_dir, argv2, NULL, MS_BIND | MS_REC,
+			   NULL) < 0) {
+			CMD_ERROR_0(cmd, "can not mount '%s' -> '%s': %s\n",
+				    argv1, argv2, strerror(errno));
+			_EXIT(out, -1);
+		}
+
+	} else if (strcmp(argv0, "mkdir") == 0) {
+		ARGC_GUARD(2, 2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_FS);
+		if (mkdir2(newroot_dir, argv1, 0755) < 0 && errno != EEXIST) {
+			CMD_ERROR_0(cmd, "can not create directory '%s': %s\n",
+				    argv1, strerror(errno));
+			_EXIT(out, -1);
+		}
+	} else if (strcmp(argv0, "tmpfs") == 0) {
+		ARGC_GUARD(2, 3);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_FS);
+		if (argc == 2) {
+			opt = "size=128M";
+		} else {
+			opt = argv2;
+		}
+		if (mount2("tmpfs", newroot_dir, argv1, "tmpfs", 0, opt) < 0) {
+			CMD_ERROR_0(cmd, "tmpfs: %s", strerror(errno));
+			_EXIT(out, -1);
+		}
 	} else if (strcmp(argv0, "perm") == 0) {
 		MIN_ARGC_GUARD(3);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_PERM);
 		access = 0;
 		for (ptr = argv1; *ptr; ++ptr) {
 			if (landlock__parse_perm_flag(&access, *ptr) < 0) {
@@ -561,6 +578,7 @@ command_interpret(struct profile_command_t *cmd,
 		globfree(&g_results);  // TODO: Move to out
 	} else if (strcmp(argv0, "seccomp.default") == 0) {
 		ARGC_GUARD(2, 2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_SECCOMP);
 		if (strcmp(argv1, "allow") == 0) {
 			prof_dt->syscall_default = SCMP_ACT_ALLOW;
 		} else if (strcmp(argv1, "kill") == 0) {
@@ -572,6 +590,7 @@ command_interpret(struct profile_command_t *cmd,
 		}
 	} else if (strcmp(argv0, "seccomp.allow") == 0) {
 		MIN_ARGC_GUARD(2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_SECCOMP);
 		for (i = 1; i < argc; ++i) {
 			nr = seccomp_syscall_resolve_name(argv[i]);
 			if (nr == __NR_SCMP_ERROR) {
@@ -590,6 +609,7 @@ command_interpret(struct profile_command_t *cmd,
 		}
 	} else if (strcmp(argv0, "seccomp.deny") == 0) {
 		MIN_ARGC_GUARD(2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_SECCOMP);
 		for (i = 1; i < argc; ++i) {
 			nr = seccomp_syscall_resolve_name(argv[i]);
 			if (nr == __NR_SCMP_ERROR) {
@@ -606,23 +626,14 @@ command_interpret(struct profile_command_t *cmd,
 				prof_dt->syscall_allow[nr] = 0;
 			}
 		}
-	} else if (strcmp(argv0, "tmpfs") == 0) {
-		ARGC_GUARD(2, 3);
-		if (argc == 2) {
-			opt = "size=128M";
-		} else {
-			opt = argv2;
-		}
-		if (mount2("tmpfs", newroot_dir, argv1, "tmpfs", 0, opt) < 0) {
-			CMD_ERROR_0(cmd, "tmpfs: %s", strerror(errno));
-			_EXIT(out, -1);
-		}
 	} else if (strcmp(argv0, "caps.drop-all") == 0) {
 		ARGC_GUARD(1, 1);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_CAPS);
 		memset(prof_dt->caps_keep, 0,
 		       prof_dt->ncap * sizeof(prof_dt->caps_keep[0]));
 	} else if (strcmp(argv0, "caps.keep") == 0) {
 		MIN_ARGC_GUARD(2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_CAPS);
 		for (i = 1; i < argc; ++i) {
 			if (cap_from_name(argv[i], &cap) < 0) {
 				CMD_ERROR_1(cmd, "unknown capability: %s",
@@ -633,6 +644,7 @@ command_interpret(struct profile_command_t *cmd,
 		}
 	} else if (strcmp(argv0, "caps.drop") == 0) {
 		MIN_ARGC_GUARD(2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_CAPS);
 		for (i = 1; i < argc; ++i) {
 			if (cap_from_name(argv[i], &cap) < 0) {
 				CMD_ERROR_1(cmd, "unknown capability: %s",
@@ -651,10 +663,11 @@ out:
 	return exit_code;
 }
 int
-profile__interpret(struct sandbox_t *sandbox, struct profile_data_t *prof_dt)
+profile__interpret(struct sandbox_t *sandbox, int actions_flags)
 {
 	int i;
 	struct profile_t *profile = sandbox->profile;
+	struct profile_data_t *prof_dt = sandbox->prof_dt;
 	struct profile_command_list_t *cmd_list;
 	struct profile_command_t *cmd;
 
@@ -662,7 +675,7 @@ profile__interpret(struct sandbox_t *sandbox, struct profile_data_t *prof_dt)
 		cmd_list = profile->cmd_list;
 		for (i = 0; i < cmd_list->count; ++i) {
 			cmd = cmd_list->cmds[i];
-			if (command_interpret(cmd, sandbox, prof_dt)) {
+			if (command_interpret(cmd, sandbox, actions_flags)) {
 				return -1;
 			}
 		}
