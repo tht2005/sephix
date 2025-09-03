@@ -4,8 +4,10 @@
 #if __has_include(<asm-generic/unistd.h>)
 #include <asm-generic/unistd.h>
 #endif
-#ifndef __NR_syscalls
-#define __NR_syscalls 1024
+#ifdef __NR_syscalls
+#define NUM_SYSCALLS __NR_syscalls
+#else
+#define NUM_SYSCALLS 1024
 #endif
 
 struct profile_t {
@@ -26,7 +28,7 @@ struct profile_data_t {
 	char *domainname;
 
 	int syscall_default;
-	int syscall_allow[__NR_syscalls];
+	int syscall_allow[NUM_SYSCALLS];
 };
 struct profile_data_t *
 profile_data_t__create();

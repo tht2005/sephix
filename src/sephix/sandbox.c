@@ -605,7 +605,7 @@ command_interpret(struct profile_command_t *cmd,
 			} else if (nr < 0) {
 				CMD_ERROR_1(cmd, "syscall '%s' not supported on this arch", argv[i]); 
 			} else {
-				assert(nr < __NR_syscalls);
+				assert(nr < NUM_SYSCALLS);
 				prof_dt->syscall_allow[nr] = 1;
 			}
 		}
@@ -619,7 +619,7 @@ command_interpret(struct profile_command_t *cmd,
 			} else if (nr < 0) {
 				CMD_ERROR_1(cmd, "syscall '%s' not supported on this arch", argv[i]); 
 			} else {
-				assert(nr < __NR_syscalls);
+				assert(nr < NUM_SYSCALLS);
 				prof_dt->syscall_allow[nr] = 0;
 			}
 		}

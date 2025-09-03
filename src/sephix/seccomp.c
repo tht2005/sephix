@@ -19,7 +19,7 @@ seccomp__init(struct sandbox_t *sandbox)
 		_EXIT(out, -1);
 	}
 
-	for (i = 0; i < __NR_syscalls; ++i) {
+	for (i = 0; i < NUM_SYSCALLS; ++i) {
 		switch (prof_dt->syscall_allow[i]) {
 			case 0:
 				if (seccomp_default != SCMP_ACT_KILL_PROCESS &&
