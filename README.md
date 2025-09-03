@@ -5,3 +5,4 @@
 - Bison
 - Libconfuse (temporary)
 - Libseccomp
+- Libcap
