@@ -7,7 +7,9 @@
 struct sandbox_t {
 	int clone_flags;
 
-	pid_t pid;
+	pid_t master_pid;
+	pid_t slave_pid;
+
 	gid_t gid;
 	uid_t uid;
 

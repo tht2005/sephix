@@ -1,3 +1,4 @@
+#include "sephix/net.h"
 #include "sephix/sandbox.h"
 #include "util.h"
 
@@ -6,82 +7,255 @@
 #include <net/if.h>
 #include <sched.h>
 #include <stdio.h>
-#include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <netlink/netlink.h>
+#include <netlink/route/addr.h>
+#include <netlink/route/link.h>
+#include <netlink/route/link/veth.h>
+#include <netlink/socket.h>
+
 int
-netlink_send(int fd, struct nlmsghdr *nh)
+net__set_link_updown(const char *ifname, int up)
 {
-	struct sockaddr_nl addr = {.nl_family = AF_NETLINK};
-	struct iovec iov = {nh, nh->nlmsg_len};
-	struct msghdr msg = {&addr, sizeof(addr), &iov, 1, NULL, 0, 0};
-	return sendmsg(fd, &msg, 0);
+	int exit_code = 0;
+	struct nl_sock *sock;
+	struct nl_cache *link_cache;
+	struct rtnl_link *link;
+	struct rtnl_link *link_change;
+	int err;
+
+	sock = nl_socket_alloc();
+	if (sock == NULL) {
+		PERROR("nl_socket_alloc");
+		_EXIT(out, -1);
+	}
+
+	if ((err = nl_connect(sock, NETLINK_ROUTE)) < 0) {
+		LOG_ERROR("nl_connect: %s", nl_geterror(err));
+		_EXIT(out_sock, -1);
+	}
+
+	if ((err = rtnl_link_alloc_cache(sock, AF_UNSPEC, &link_cache)) < 0) {
+		LOG_ERROR("rtnl_link_alloc_cache: %s", nl_geterror(err));
+		_EXIT(out_sock, -1);
+	}
+
+	link = rtnl_link_get_by_name(link_cache, ifname);
+	if (link == NULL) {
+		fprintf(stderr, "sephix: no such interface '%s'\n", ifname);
+		_EXIT(out_link_cache, -1);
+	}
+
+	link_change = rtnl_link_alloc();
+	if (link_change == NULL) {
+		PERROR("rtnl_link_change");
+		_EXIT(out_link, -1);
+	}
+
+	if (up)
+		rtnl_link_set_flags(link_change, IFF_UP);
+	else
+		rtnl_link_unset_flags(link_change, IFF_UP);
+
+	if ((err = rtnl_link_change(sock, link, link_change, 0)) < 0) {
+		LOG_ERROR("rtnl_link_change: %s", nl_geterror(err));
+		_EXIT(out_link_change, -1);
+	}
+
+out_link_change:
+	rtnl_link_put(link_change);
+out_link:
+	rtnl_link_put(link);
+out_link_cache:
+	nl_cache_free(link_cache);
+out_sock:
+	nl_socket_free(sock);
+out:
+	return exit_code;
 }
 
 int
-setup_net_interface(char *interface)
+add_addr(struct nl_sock *sock, int ifindex, const char *cidr)
 {
 	int exit_code = 0;
-	int fd;
-	unsigned int ifindex;
+	struct rtnl_addr *addr;
+	struct nl_addr *local;
+	int err;
 
-	char buf[NLMSG_SPACE(sizeof(struct ifinfomsg))];
-	char reply_buf[1 << 13];
-
-	struct nlmsghdr *nh;
-	struct ifinfomsg *ifi;
-
-	fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
-	if (fd < 0) {
-		PERROR("socket");
+	addr = rtnl_addr_alloc();
+	if (addr == NULL) {
+		PERROR("rtnl_addr_alloc");
 		_EXIT(out, -1);
 	}
 
-	ifindex = if_nametoindex(interface);
-	if (!ifindex) {
-		PERROR("if_nametoindex");
-		_EXIT(out, -1);
+	if ((err = nl_addr_parse(cidr, AF_INET, &local)) < 0) {
+		LOG_ERROR("nl_addr_parse(%s): %s", cidr, nl_geterror(err));
+		_EXIT(out_addr, -1);
 	}
 
-	memset(buf, 0, sizeof(buf));
+	rtnl_addr_set_local(addr, local);
+	rtnl_addr_set_ifindex(addr, ifindex);
 
-	nh = (struct nlmsghdr *)buf;
-	nh->nlmsg_len = NLMSG_LENGTH(sizeof(struct ifinfomsg));
-	nh->nlmsg_type = RTM_NEWLINK;
-	nh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
-	nh->nlmsg_seq = 1;
-
-	ifi = NLMSG_DATA(nh);
-	ifi->ifi_family = AF_UNSPEC;
-	ifi->ifi_index = ifindex;
-	ifi->ifi_flags = IFF_UP;
-	ifi->ifi_change = IFF_UP;
-
-	if (netlink_send(fd, nh) < 0) {
-		PERROR("netlink_send");
-		_EXIT(out, -1);
+	if ((err = rtnl_addr_add(sock, addr, 0)) < 0) {
+		LOG_ERROR("rtnl_addr_add: %s", nl_geterror(err));
+		_EXIT(out_local, -1);
 	}
 
-	if (recv(fd, reply_buf, sizeof(reply_buf), 0) < 0) {
-		PERROR("recv");
-		_EXIT(out, -1);
-	}
-
-	fprintf(stderr, "[DEBUG] Device %s is up!\n", interface);
-
+out_local:
+	nl_addr_put(local);
+out_addr:
+	rtnl_addr_put(addr);
 out:
-	if (fd > 0) close(fd);
+	return exit_code;
+}
+
+int
+create_veth(const char *if1, const char *ip1, const char *if2, const char *ip2)
+{
+	int exit_code = 0;
+	struct nl_sock *sock;
+	struct nl_cache *link_cache;
+	struct rtnl_link *link, *peer;
+	int err;
+
+	sock = nl_socket_alloc();
+	if (sock == NULL) {
+		PERROR("nl_socket_alloc");
+		_EXIT(out, -1);
+	}
+	if (nl_connect(sock, NETLINK_ROUTE) < 0) {
+		PERROR("nl_connect");
+		_EXIT(out_sock, -1);
+	}
+
+	if (rtnl_link_alloc_cache(sock, AF_UNSPEC, &link_cache) < 0) {
+		PERROR("rtnl_link_alloc_cache");
+		_EXIT(out_sock, -1);
+	}
+
+	link = rtnl_link_veth_alloc();
+	if (link == NULL) {
+		_EXIT(out_link_cache, -1);
+	}
+	rtnl_link_set_name(link, if1);
+
+	peer = rtnl_link_veth_get_peer(link);
+	rtnl_link_set_name(peer, if2);
+
+	if ((err = rtnl_link_add(sock, link, NLM_F_CREATE | NLM_F_EXCL)) < 0) {
+		LOG_ERROR("rtnl_link_add: %s", nl_geterror(err));
+		_EXIT(out_link, -1);
+	}
+
+	if (nl_cache_refill(sock, link_cache) < 0) {
+		PERROR("nl_cache_refill");
+		_EXIT(out_link, -1);
+	}
+
+	struct rtnl_link *l1 = rtnl_link_get_by_name(link_cache, if1);
+	if (l1 == NULL) {
+		PERROR("rtnl_link_get_by_name");
+		_EXIT(out_link, -1);
+	}
+	struct rtnl_link *l2 = rtnl_link_get_by_name(link_cache, if2);
+	if (l2 == NULL) {
+		PERROR("rtnl_link_get_by_name");
+		_EXIT(out_l1, -1);
+	}
+
+	int ifindex1 = rtnl_link_get_ifindex(l1);
+	if (ifindex1 <= 0) {
+		LOG_ERROR("rtnl_link_get_ifindex");
+		_EXIT(out_l2, -1);
+	}
+	int ifindex2 = rtnl_link_get_ifindex(l2);
+	if (ifindex2 <= 0) {
+		LOG_ERROR("rtnl_link_get_ifindex");
+		_EXIT(out_l2, -1);
+	}
+
+	if (add_addr(sock, ifindex1, ip1) < 0) {
+		LOG_ERROR("add_addr");
+		_EXIT(out_l2, -1);
+	}
+	if (add_addr(sock, ifindex2, ip2) < 0) {
+		LOG_ERROR("add_addr");
+		_EXIT(out_l2, -1);
+	}
+
+out_l2:
+	rtnl_link_put(l2);
+out_l1:
+	rtnl_link_put(l1);
+out_link:
+	rtnl_link_put(link);
+out_link_cache:
+	nl_cache_free(link_cache);
+out_sock:
+	nl_socket_free(sock);
+out:
+	return exit_code;
+}
+
+int
+move_if_to_ns(const char *ifname, pid_t target_pid)
+{
+	int exit_code = 0;
+	struct nl_sock *sock;
+	struct nl_cache *link_cache;
+	struct rtnl_link *link, *link_change;
+	int err;
+
+	sock = nl_socket_alloc();
+	if (sock == NULL) {
+		PERROR("nl_socket_alloc");
+		_EXIT(out, -1);
+	}
+	if ((err = nl_connect(sock, NETLINK_ROUTE)) < 0) {
+		LOG_ERROR("nl_connect: %s", nl_geterror(err));
+		_EXIT(out_sock, -1);
+	}
+
+	if ((err = rtnl_link_alloc_cache(sock, AF_UNSPEC, &link_cache)) < 0) {
+		LOG_ERROR("rtnl_link_alloc_cache: %s", nl_geterror(err));
+		_EXIT(out_sock, -1);
+	}
+
+	link = rtnl_link_get_by_name(link_cache, ifname);
+	if (link == NULL) {
+		LOG_ERROR("rtnl_link_get_by_name: no such interface %s",
+			  ifname);
+		_EXIT(out_link_cache, -1);
+	}
+
+	link_change = rtnl_link_alloc();
+	if (link_change == NULL) {
+		PERROR("rtnl_link_alloc");
+		_EXIT(out_link, -1);
+	}
+
+	rtnl_link_set_ns_pid(link_change, target_pid);
+	if ((err = rtnl_link_change(sock, link, link_change, 0)) < 0) {
+		LOG_ERROR("rtnl_link_change: %s", nl_geterror(err));
+		_EXIT(out_link_change, -1);
+	}
+
+out_link_change:
+	rtnl_link_put(link_change);
+out_link:
+	rtnl_link_put(link);
+out_link_cache:
+	nl_cache_free(link_cache);
+out_sock:
+	nl_socket_free(sock);
+out:
 	return exit_code;
 }
 
 int
 net__init(struct sandbox_t *sandbox)
 {
-	if (sandbox->clone_flags & CLONE_NEWNET) {
-		if (setup_net_interface("lo") < 0) {
-			return -1;
-		}
-	}
 	return 0;
 }
