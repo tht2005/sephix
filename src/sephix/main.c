@@ -174,7 +174,7 @@ exec:
 	}
 
 	struct sandbox_t sandbox = {
-		.pid = getpid(),
+		.master_pid = getpid(),
 		.gid = getgid(),
 		.uid = getuid(),
 		.name = NULL,

@@ -1,13 +1,12 @@
 #include "sephix/sandbox.h"
 #include "profile.h"
 #include "sephix/landlock.h"
+#include "sephix/net.h"
 #include "util.h"
 
 #include <assert.h>
 #include <fcntl.h>
 #include <glob.h>
-#include <linux/landlock.h>
-#include <linux/prctl.h>
 #include <sched.h>
 #include <seccomp.h>
 #include <signal.h>
@@ -55,8 +54,9 @@ enum ACTION {
 	ACTION_SECCOMP = 1 << 2,
 	ACTION_CAPS = 1 << 3,
 	ACTION_PERM = 1 << 4,
+	ACTION_NET = 1 << 5,
 
-	ACTION_ALL = ((1 << 5) - 1)
+	ACTION_ALL = ((1 << 6) - 1)
 };
 int
 command_interpret(struct profile_command_t *cmd,
@@ -319,6 +319,9 @@ sandbox__init(struct sandbox_t *sandbox)
 	munmap(child_stack, STACK_SIZE);
 	prctl(PR_SET_PDEATHSIG,
 	      SIGKILL);	 // after parent die, send SIGKILL to child
+
+	// store child's pid
+	sandbox->slave_pid = child_pid;
 
 	// map uid, gid in new child's user namespace
 	if (setup_userns_mapping(sandbox, child_pid) < 0) {
@@ -667,6 +670,26 @@ command_interpret(struct profile_command_t *cmd,
 				_EXIT(out, -1);
 			}
 			prof_dt->caps_keep[cap] = 0;
+		}
+	} else if (strcmp(argv0, "ifup") == 0) {
+		MIN_ARGC_GUARD(2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_NET);
+		for (i = 1; i < argc; ++i) {
+			if (net__set_link_updown(argv[i], 1) < 0) {
+				CMD_ERROR_0(cmd, "can't set interface %s up",
+					    argv[i]);
+				_EXIT(out, -1);
+			}
+		}
+	} else if (strcmp(argv0, "ifdown") == 0) {
+		ARGC_GUARD(2, 2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_NET);
+		for (i = 1; i < argc; ++i) {
+			if (net__set_link_updown(argv[i], 0) < 0) {
+				CMD_ERROR_0(cmd, "can't set interface %s down",
+					    argv[i]);
+				_EXIT(out, -1);
+			}
 		}
 	} else {
 		CMD_ERROR_0(cmd, "command '%s' do not exists", argv0);

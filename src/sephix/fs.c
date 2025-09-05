@@ -39,7 +39,7 @@ fs__create_public_metadata(struct sandbox_t *sandbox)
 		_EXIT(out, -1);
 	}
 	if (asprintf(&filename, "%s/profile/%d", sandbox->runtime_dir,
-		     sandbox->pid) < 0) {
+		     sandbox->master_pid) < 0) {
 		PERROR("asprintf");
 		_EXIT(out, -1);
 	}
