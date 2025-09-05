@@ -6,3 +6,4 @@
 - Libconfuse (temporary)
 - Libseccomp
 - Libcap
+- Libnl
