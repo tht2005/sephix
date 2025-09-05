@@ -1,6 +1,6 @@
-#include "util.h"
 #include "profile.h"
 #include "sephix/sandbox.h"
+#include "util.h"
 
 #include <sched.h>
 #include <string.h>
@@ -9,22 +9,16 @@
 int
 uts__init(struct sandbox_t *sandbox)
 {
-	int exit_code = 0;
 	struct profile_data_t *prof_dt = sandbox->prof_dt;
 	char *hostname;
 	char *domainname;
 	if (sandbox->clone_flags & CLONE_NEWUTS) {
 		hostname = prof_dt->hostname;
-		if (sethostname(hostname, strlen(hostname)) < 0) {
-			PERROR("sethostname");
-			_EXIT(out, -1);
-		}
+		if (sethostname(hostname, strlen(hostname)) < 0)
+			DIE_PERROR("sethostname");
 		domainname = prof_dt->domainname;
-		if (setdomainname(domainname, strlen(domainname)) < 0) {
-			PERROR("setdomainname");
-			_EXIT(out, -1);
-		}
+		if (setdomainname(domainname, strlen(domainname)) < 0)
+			DIE_PERROR("setdomainname");
 	}
-out:
-	return exit_code;
+	return 0;
 }

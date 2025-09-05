@@ -22,42 +22,29 @@
 int
 fs__create_public_metadata(struct sandbox_t *sandbox)
 {
-	int exit_code = 0;
 	int fd;
 	char *filename = NULL;
 
 	printf("[DEBUG] runtime_dir = %s\n", sandbox->runtime_dir);
 	// ensure runtime dir exists
-	if (mkdir(sandbox->runtime_dir, PERM_RWX_RX_RX) && errno != EEXIST) {
-		PERROR("mkdir");
-		_EXIT(out, -1);
-	}
+	if (mkdir(sandbox->runtime_dir, PERM_RWX_RX_RX) && errno != EEXIST)
+		DIE_PERROR("mkdir");
 
 	if (mkdir2(sandbox->runtime_dir, "/profile", PERM_RWX_RX_RX) &&
-	    errno != EEXIST) {
-		PERROR("mkdir");
-		_EXIT(out, -1);
-	}
+	    errno != EEXIST)
+		DIE_PERROR("mkdir");
 	if (asprintf(&filename, "%s/profile/%d", sandbox->runtime_dir,
-		     sandbox->master_pid) < 0) {
-		PERROR("asprintf");
-		_EXIT(out, -1);
-	}
+		     sandbox->master_pid) < 0)
+		DIE_PERROR("asprintf");
 	fprintf(stderr, "[DEBUG] filename=%s\n", filename);
 	fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC, PERM_RW_R_R);
-	if (fd < 0) {
-		PERROR("open");
-		_EXIT(out, -1);
-	}
+	if (fd < 0) DIE_PERROR("open");
 	const char *profile_name = "bash\n";  // temporary
 	size_t len = strlen(profile_name);
-	if (write(fd, profile_name, len) != len) {
-		PERROR("write");
-		_EXIT(out, -1);
-	}
-out:
+	if (write(fd, profile_name, len) != len) DIE_PERROR("write");
+
 	if (filename) free(filename);
-	return exit_code;
+	return 0;
 }
 
 int

@@ -48,7 +48,6 @@ print_version()
 int
 main(int argc, char **argv)
 {
-	int exit_code = EXIT_SUCCESS;
 	int i, j;
 
 	char *profile_name = NULL;
@@ -68,17 +67,13 @@ main(int argc, char **argv)
 	static struct profile_data_t *prof_dt;
 
 	prof_dt = profile_data_t__create();
-	if (prof_dt == NULL) {
-		LOG_ERROR("profile_data_t");
-		_EXIT(out, -1);
-	}
+	if (prof_dt == NULL) DIE_LOG_ERROR("profile_data_t__create");
 
 #if YYDEBUG == 1
 	yydebug = 1;
 #endif
-	if (config__parse(&cfg, SYSCONF_DIR "/sephix.config") != 0) {
-		_ERR_EXIT(out);
-	}
+	if (config__parse(&cfg, SYSCONF_DIR "/sephix.config") != 0)
+		exit(EXIT_FAILURE);
 
 	cfg_sec = cfg_getsec(cfg, "cli");
 	cli__max_arg_count = cfg_getint(cfg_sec, "max-arg-count");
@@ -92,11 +87,11 @@ main(int argc, char **argv)
 		if (strcmp(argv[i], "-h") == 0 ||
 		    strcmp(argv[i], "--help") == 0) {
 			print_help();
-			goto out;
+			exit(EXIT_SUCCESS);
 		} else if (strcmp(argv[i], "-v") == 0 ||
 			   strcmp(argv[i], "--version") == 0) {
 			print_version();
-			goto out;
+			exit(EXIT_SUCCESS);
 		} else if (strcmp(argv[i], "--profile") == 0) {
 			PARSE_OPTION(1);
 			profile_name = arg[0];
@@ -113,7 +108,7 @@ main(int argc, char **argv)
 					"sephix: %s is an invalid command\n",
 					argv[i]);
 			}
-			_ERR_EXIT(out);
+			exit(EXIT_FAILURE);
 		}
 
 #undef PARSE_OPTION
@@ -121,25 +116,20 @@ main(int argc, char **argv)
 
 	// if it reach here, no exec command is parsed
 	print_usage();
-	_ERR_EXIT(out);
+	exit(EXIT_FAILURE);
 
 exec:
 	assert(profile_name);
-	if (profile__parse(&profile, profile_name)) {
-		_ERR_EXIT(out);
-	}
+	if (profile__parse(&profile, profile_name)) exit(EXIT_FAILURE);
 
 	exec_argc = argc - 1 - i;
 	if (exec_argc > cli__max_arg_count) {
 		fprintf(stderr, "[fixme] exec-argc (%d) > max-arg-count (%d)\n",
 			exec_argc, cli__max_arg_count);
-		_ERR_EXIT(out);
+		exit(EXIT_FAILURE);
 	}
 	exec_argv = (char **)malloc((exec_argc + 1) * sizeof(char *));
-	if (!exec_argv) {
-		PERROR("malloc");
-		_ERR_EXIT(out);
-	}
+	if (!exec_argv) DIE_PERROR("malloc");
 	for (j = 0; j < exec_argc; ++j) {
 		exec_argv[j] = argv[i + 1 + j];
 		if (strlen(exec_argv[j]) > cli__max_arg_len) {
@@ -147,7 +137,7 @@ exec:
 				"[fixme] len(exec-argv[j]) (%lu) > max-arg-len "
 				"(%d)\n",
 				strlen(exec_argv[j]), cli__max_arg_len);
-			_ERR_EXIT(out);
+			exit(EXIT_FAILURE);
 		}
 	}
 	exec_argv[exec_argc] = NULL;
@@ -159,17 +149,11 @@ exec:
 
 	if (getuid() == 0) {
 		runtime_dir = strdup("/run/sephix");
-		if (!runtime_dir) {
-			PERROR("strdup");
-			_ERR_EXIT(out);
-		}
+		if (!runtime_dir) DIE_PERROR("strdup");
 		printf("[DEBUG] root: runtime_dir = %s\n", runtime_dir);
 	} else {
-		if (asprintf(&runtime_dir, "/run/user/%d/sephix", getuid()) <
-		    0) {
-			PERROR("asprintf");
-			_ERR_EXIT(out);
-		}
+		if (asprintf(&runtime_dir, "/run/user/%d/sephix", getuid()) < 0)
+			DIE_PERROR("asprintf");
 		printf("[DEBUG] user: runtime_dir = %s\n", runtime_dir);
 	}
 
@@ -185,16 +169,12 @@ exec:
 		.exec_argv = exec_argv,
 	};
 
-	if (sandbox__init(&sandbox) < 0) {
-		LOG_ERROR("sandbox__init failed");
-		_ERR_EXIT(out);
-	}
+	if (sandbox__init(&sandbox) < 0) DIE_LOG_ERROR("sandbox__init failed");
 
-out:
 	// [TODO] free sandbox
 	// [TODO] free profile
 	if (prof_dt) profile_data_t__free(prof_dt);
 	if (runtime_dir) free(runtime_dir);
 	if (exec_argv) free(exec_argv);
-	return exit_code;
+	return 0;
 }

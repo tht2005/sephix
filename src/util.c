@@ -31,35 +31,19 @@ file_read(const char *filename, size_t *out_size)
 	long size;
 
 	fp = fopen(filename, "r");
-	if (fp == NULL) {
-		PERROR("fopen");
-		goto out;
-	}
-	if (fseek(fp, 0, SEEK_END) != 0) {
-		PERROR("fseek");
-		goto out;
-	}
+	if (fp == NULL) DIE_PERROR("fopen");
+	if (fseek(fp, 0, SEEK_END) != 0) DIE_PERROR("fseek");
 	size = ftell(fp);
-	if (size < 0) {
-		PERROR("ftell");
-		goto out;
-	}
+	if (size < 0) DIE_PERROR("ftell");
 	rewind(fp);
 	buf = (char *)malloc((size + 1) * sizeof(char));
-	if (!buf) {
-		PERROR("malloc");
-		goto out;
-	}
-	if (fread(buf, 1, size, fp) != (unsigned long)size) {
-		PERROR("fread");
-		free(buf);
-		buf = NULL;
-		goto out;
-	}
+	if (!buf) DIE_PERROR("malloc");
+	if (fread(buf, 1, size, fp) != (unsigned long)size) DIE_PERROR("fread");
 	buf[size] = '\0';
 	if (out_size) *out_size = size;
-out:
-	if (fp) fclose(fp);
+
+	fclose(fp);
+	free(buf);
 	return buf;
 }
 
