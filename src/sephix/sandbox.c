@@ -404,6 +404,75 @@ boolean_value_parse(int *variable, int def, const char *str)
 		if (((_flags) & (_flag)) == 0) goto _out; \
 	} while (0)
 
+char *
+get_safeenv(const char *name)
+{
+	char *value;
+	if (strcmp(name, "HOME") == 0) {
+		struct passwd *pw;  // must not free this
+		pw = getpwuid(getuid());
+		if (pw == NULL) DIE_PERROR("getpwuid");
+		value = strdup(pw->pw_dir);
+		if (value == NULL) DIE_PERROR("strdup");
+	} else {
+		value = NULL;
+	}
+	return value;
+}
+
+char *
+process_argument(struct profile_command_t *cmd, char *arg)
+{
+	char *p;
+	int c;
+	int match = 0;
+
+	string str = new_string();
+	string tmp;
+	char *tmp2;
+
+	for (p = arg; (c = *p); ++p) {
+		if (c == match) {
+			match = 0;
+		} else if (match == 0 && (c == '\'' || c == '\"')) {
+			match = c;
+		} else {
+			if (c == '\\') {
+				c = *(++p);
+				if (c == '\0')
+					DIE_CMD_ERROR_0(
+						cmd,
+						"escape character '\\' at the "
+						"end of argument");
+				str = string_push_back(str, c);
+			} else if (c == '@' && *(p + 1) == '{') {
+				tmp = new_string();
+				for (p += 2; *p && *p != '}'; ++p)
+					tmp = string_push_back(tmp, *p);
+				if (*p == '\0')
+					DIE_CMD_ERROR_0(
+						cmd, "@{... not ends with '}'");
+				tmp2 = get_safeenv(tmp);
+				free_string(tmp);
+				if (tmp2 == NULL)
+					DIE_CMD_ERROR_0(
+						cmd,
+						"variable @{%s} do not valid\n",
+						tmp2);
+				str = string_append_back(str, tmp2);
+				free(tmp2);
+			} else {
+				str = string_push_back(str, c);
+			}
+		}
+	}
+
+	tmp2 = strdup(str);
+	free_string(str);
+	if (tmp2 == NULL) DIE_PERROR("strdup");
+	return tmp2;
+}
+
 int
 command_interpret(struct profile_command_t *cmd,
 		  struct sandbox_t *sandbox,
