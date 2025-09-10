@@ -29,6 +29,7 @@ profile_data_t__create()
 		return NULL;
 	}
 
+	prof_dt->unshare_user = 0;
 	prof_dt->unshare_pid = 0;
 	prof_dt->unshare_net = 0;
 	prof_dt->unshare_ipc = 0;
@@ -205,7 +206,6 @@ is_reg_file(const char *filepath)
 int
 get_filepath_from_profile_name(char **_res, const char *profile_name)
 {
-	int exit_code = 0;
 	char *res;
 	struct passwd *pw;  // must not free this
 	char *usr_filepath = NULL;
@@ -213,28 +213,17 @@ get_filepath_from_profile_name(char **_res, const char *profile_name)
 
 	if (is_reg_file(profile_name) == 0) {
 		res = strdup(profile_name);
-		if (res == NULL) {
-			PERROR("strdup");
-			_EXIT(out, -1);
-		}
+		if (res == NULL) DIE_PERROR("strdup");
 	} else {
 		pw = getpwuid(getuid());
-		if (pw == NULL) {
-			PERROR("getpwuid");
-			_EXIT(out, -1);
-		}
+		if (pw == NULL) DIE_PERROR("getpwuid");
 
 		if (asprintf(&usr_filepath, "%s/.config/sephix/%s", pw->pw_dir,
-			     profile_name) < 0) {
-			PERROR("asprintf");
-			_EXIT(out, -1);
-		}
+			     profile_name) < 0)
+			DIE_PERROR("asprintf");
 		if (asprintf(&etc_filepath, SYSCONF_DIR "/%s", profile_name) <
-		    0) {
-			PERROR("asprintf");
-			_EXIT(out, -1);
-		}
-
+		    0)
+			DIE_PERROR("asprintf");
 		if (is_reg_file(usr_filepath) == 0) {
 			res = usr_filepath;
 			usr_filepath = NULL;
@@ -242,24 +231,21 @@ get_filepath_from_profile_name(char **_res, const char *profile_name)
 			res = etc_filepath;
 			etc_filepath = NULL;
 		} else {
-			fprintf(stderr,
-				"sephix: can not find a profile with option "
-				"profile='%s'\n",
-				profile_name);
-			_EXIT(out, -1);
+			DIE("sephix: can not find a profile with option "
+			    "profile='%s'\n",
+			    profile_name);
 		}
 	}
 	*_res = res;
-out:
-	if (usr_filepath) free(usr_filepath);
-	if (etc_filepath) free(etc_filepath);
-	return exit_code;
+
+	free(usr_filepath);
+	free(etc_filepath);
+	return 0;
 }
 
 int
 profile__parse(struct profile_t *profile, char *profile_name)
 {
-	int exit_code = 0;
 	int status;
 	char *profile_filepath = NULL;
 
@@ -268,28 +254,22 @@ profile__parse(struct profile_t *profile, char *profile_name)
 	yyscan_t scanner = NULL;
 	struct scanner_extra_t extra;
 
-	if (get_filepath_from_profile_name(&profile_filepath, profile_name)) {
-		_EXIT(out, -1);
-	}
+	if (get_filepath_from_profile_name(&profile_filepath, profile_name))
+		exit(EXIT_FAILURE);
+
 	profile->filename = profile_filepath;
 	fprintf(stderr, "[DEBUG] profile_filepath = '%s'\n", profile_filepath);
 
 	f_in = fopen(profile_filepath, "r");
-	if (!f_in) {
-		PERROR("fopen");
-		_EXIT(out, -1);
-	}
+	if (!f_in) DIE_PERROR("fopen");
 
 	yylex_init(&scanner);
 	yylex_init_extra(&extra, &scanner);
 	yyset_in(f_in, scanner);
-	if ((status = yyparse(scanner, profile))) {
-		LOG_ERROR("yyparse exit %d", status);
-		_EXIT(out, -1);
-	}
+	if ((status = yyparse(scanner, profile)))
+		DIE_LOG_ERROR("yyparse exit %d", status);
 
-out:
-	if (f_in) fclose(f_in);
-	if (scanner) yylex_destroy(scanner);
-	return exit_code;
+	fclose(f_in);
+	yylex_destroy(scanner);
+	return 0;
 }
