@@ -18,7 +18,6 @@ struct profile_t {
 #include "profile_parser.tab.h"	 // must be after profile_t definition
 
 struct profile_data_t {
-	int unshare_user;
 	int unshare_pid;
 	int unshare_net;
 	int unshare_ipc;

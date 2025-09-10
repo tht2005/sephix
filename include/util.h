@@ -2,9 +2,7 @@
 #define __SEPHIX__UTIL_H
 
 #include <errno.h>
-#include <netlink/errno.h>
-#include <stdlib.h>
-#include <string.h>
+#include <string.h>  // do not remove
 #include <sys/mount.h>
 
 // TODO: fix loc error
@@ -25,43 +23,16 @@
 		log_error(__FILE__, __LINE__, __func__, fmt, ##__VA_ARGS__); \
 	} while (0)
 
-#define PERROR(str) LOG_ERROR("%s: %s", str, strerror(errno))
-
-#define PERROR_NETLINK(str, err) LOG_ERROR("%s: %s", str, nl_geterror(err))
-
-#define DIE(_fmt, ...)                                \
-	do {                                          \
-		fprintf(stderr, _fmt, ##__VA_ARGS__); \
-		exit(EXIT_FAILURE);                   \
-	} while (0)
-#define DIE_CMD_ERROR_0(_cmd, _fmt, ...)                \
-	do {                                            \
-		CMD_ERROR_0(_cmd, _fmt, ##__VA_ARGS__); \
-		exit(EXIT_FAILURE);                     \
-	} while (0)
-#define DIE_CMD_ERROR_1(_cmd, _fmt, ...)                \
-	do {                                            \
-		CMD_ERROR_1(_cmd, _fmt, ##__VA_ARGS__); \
-		exit(EXIT_FAILURE);                     \
-	} while (0)
-#define DIE_LOG_ERROR(fmt, ...)                \
-	do {                                   \
-		LOG_ERROR(fmt, ##__VA_ARGS__); \
-		exit(EXIT_FAILURE);            \
-	} while (0)
-#define DIE_PERROR(str)             \
-	do {                        \
-		PERROR(str);        \
-		exit(EXIT_FAILURE); \
-	} while (0)
-#define DIE_PERROR_NETLINK(str, err)      \
-	do {                              \
-		PERROR_NETLINK(str, err); \
-		exit(EXIT_FAILURE);       \
-	} while (0)
-
 void
 log_error(const char *file, int line, const char *func, const char *fmt, ...);
+#define PERROR(str) LOG_ERROR("%s: %s", str, strerror(errno))
+
+#define _EXIT(_out, _code)         \
+	{                          \
+		exit_code = _code; \
+		goto _out;         \
+	}
+#define _ERR_EXIT(_out) _EXIT(_out, EXIT_FAILURE)
 
 /*
  * Conveniently parse option arguments. Example:
@@ -70,16 +41,18 @@ log_error(const char *file, int line, const char *func, const char *fmt, ...);
  * += 2.
  */
 static char *arg[10];
-#define PARSE_OPTION(cnt)                                                    \
-	{                                                                    \
-		if (i + cnt >= argc) {                                       \
-			DIE("sephix: %s requires %d argument(s)\n", argv[i], \
-			    cnt);                                            \
-		}                                                            \
-		for (j = 0; j < cnt; ++j) {                                  \
-			arg[j] = argv[i + 1 + j];                            \
-		}                                                            \
-		i += cnt;                                                    \
+#define PARSE_OPTION(cnt)                                               \
+	{                                                               \
+		if (i + cnt >= argc) {                                  \
+			fprintf(stderr,                                 \
+				"sephix: %s requires %d argument(s)\n", \
+				argv[i], cnt);                          \
+			goto out;                                       \
+		}                                                       \
+		for (j = 0; j < cnt; ++j) {                             \
+			arg[j] = argv[i + 1 + j];                       \
+		}                                                       \
+		i += cnt;                                               \
 	}
 
 char *

@@ -1,5 +1,4 @@
 #include "util.h"
-#include "euid.h"
 
 #include <assert.h>
 #include <fcntl.h>
@@ -32,19 +31,35 @@ file_read(const char *filename, size_t *out_size)
 	long size;
 
 	fp = fopen(filename, "r");
-	if (fp == NULL) DIE_PERROR("fopen");
-	if (fseek(fp, 0, SEEK_END) != 0) DIE_PERROR("fseek");
+	if (fp == NULL) {
+		PERROR("fopen");
+		goto out;
+	}
+	if (fseek(fp, 0, SEEK_END) != 0) {
+		PERROR("fseek");
+		goto out;
+	}
 	size = ftell(fp);
-	if (size < 0) DIE_PERROR("ftell");
+	if (size < 0) {
+		PERROR("ftell");
+		goto out;
+	}
 	rewind(fp);
 	buf = (char *)malloc((size + 1) * sizeof(char));
-	if (!buf) DIE_PERROR("malloc");
-	if (fread(buf, 1, size, fp) != (unsigned long)size) DIE_PERROR("fread");
+	if (!buf) {
+		PERROR("malloc");
+		goto out;
+	}
+	if (fread(buf, 1, size, fp) != (unsigned long)size) {
+		PERROR("fread");
+		free(buf);
+		buf = NULL;
+		goto out;
+	}
 	buf[size] = '\0';
 	if (out_size) *out_size = size;
-
-	fclose(fp);
-	free(buf);
+out:
+	if (fp) fclose(fp);
 	return buf;
 }
 
@@ -79,10 +94,7 @@ mkdir2(const char *prefix, const char *suffix, __mode_t mode)
 	if (asprintf(&path, "%s%s", prefix, suffix) < 0) {
 		return -1;
 	}
-	ROOT_PRIVILEGE
-	{
-		status = mkdir(path, mode);
-	}
+	status = mkdir(path, mode);
 	free(path);
 	return status;
 }
@@ -104,10 +116,7 @@ mount2(const char *special_file,
 	if (asprintf(&dir, "%s%s", dir_prefix, dir_suffix) < 0) {
 		return -1;
 	}
-	ROOT_PRIVILEGE
-	{
-		status = mount(special_file, dir, fstype, rwflag, data);
-	}
+	status = mount(special_file, dir, fstype, rwflag, data);
 	free(dir);
 	return status;
 }

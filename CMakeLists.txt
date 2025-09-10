@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 
 project(SEPHIX VERSION 0.1.0)
 
-set(SYSCONF_DIR "/etc/sephix" CACHE STRING "System configuration directory")
-option(YYDEBUG "Turn on bison debug" OFF)
+set(SYSCONF_DIR "/etc/sephix" CACHE STRING "")
+option(YYDEBUG "" OFF)
 
 # Dependencies
 
@@ -66,12 +66,3 @@ target_link_libraries(sephix
 	PRIVATE ${FLEX_LIBRARIES} ${CONFUSE_LIBRARIES} ${SECCOMP_LIBRARIES}
 	PRIVATE ${LIBCAP_LIBRARIES} ${LIBNL_LIBRARIES}
 )
-
-# Install
-install(TARGETS sephix
-	RUNTIME DESTINATION bin
-	PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-		    GROUP_READ GROUP_EXECUTE
-		    WORLD_READ WORLD_EXECUTE
-		    SETUID)
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/etc/ DESTINATION ${SYSCONF_DIR})
