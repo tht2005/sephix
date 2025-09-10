@@ -2,6 +2,7 @@
 #include "profile_parser.tab.h"
 #include "config.h"
 #include "confuse.h"
+#include "euid.h"
 #include "sephix/sandbox.h"
 #include "sephix_build_config.h"
 #include "util.h"
@@ -48,6 +49,23 @@ print_version()
 int
 main(int argc, char **argv)
 {
+	/*
+	 * At here i am root, but immediately drop to real user. After this,
+	 * all of the privilege operations should (must) be placed in
+	 * ROOT_PRIVILEGE block, provided by euid.h:
+	 *
+	 * #include "euid.h"
+	 *
+	 * <inside function>(...)
+	 * {
+	 *     ROOT_PRIVILEGE {
+	 *         // code
+	 *     }
+	 * }
+	 */
+	EUID__init();
+	EUID__assert_user();
+
 	int i, j;
 
 	char *profile_name = NULL;
