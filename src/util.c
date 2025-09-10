@@ -1,4 +1,5 @@
 #include "util.h"
+#include "euid.h"
 
 #include <assert.h>
 #include <fcntl.h>
@@ -78,7 +79,10 @@ mkdir2(const char *prefix, const char *suffix, __mode_t mode)
 	if (asprintf(&path, "%s%s", prefix, suffix) < 0) {
 		return -1;
 	}
-	status = mkdir(path, mode);
+	ROOT_PRIVILEGE
+	{
+		status = mkdir(path, mode);
+	}
 	free(path);
 	return status;
 }
@@ -100,7 +104,10 @@ mount2(const char *special_file,
 	if (asprintf(&dir, "%s%s", dir_prefix, dir_suffix) < 0) {
 		return -1;
 	}
-	status = mount(special_file, dir, fstype, rwflag, data);
+	ROOT_PRIVILEGE
+	{
+		status = mount(special_file, dir, fstype, rwflag, data);
+	}
 	free(dir);
 	return status;
 }

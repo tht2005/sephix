@@ -1,4 +1,5 @@
 #include "profile.h"
+#include "euid.h"
 #include "sephix/sandbox.h"
 #include "util.h"
 
@@ -14,11 +15,17 @@ uts__init(struct sandbox_t *sandbox)
 	char *domainname;
 	if (sandbox->clone_flags & CLONE_NEWUTS) {
 		hostname = prof_dt->hostname;
-		if (sethostname(hostname, strlen(hostname)) < 0)
-			DIE_PERROR("sethostname");
+		ROOT_PRIVILEGE
+		{
+			if (sethostname(hostname, strlen(hostname)) < 0)
+				DIE_PERROR("sethostname");
+		}
 		domainname = prof_dt->domainname;
-		if (setdomainname(domainname, strlen(domainname)) < 0)
-			DIE_PERROR("setdomainname");
+		ROOT_PRIVILEGE
+		{
+			if (setdomainname(domainname, strlen(domainname)) < 0)
+				DIE_PERROR("setdomainname");
+		}
 	}
 	return 0;
 }

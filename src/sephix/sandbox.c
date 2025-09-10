@@ -1,6 +1,7 @@
 #include "sephix/sandbox.h"
 #include "profile.h"
 #include "ds/string.h"
+#include "euid.h"
 #include "sephix/landlock.h"
 #include "sephix/net.h"
 #include "util.h"
@@ -93,6 +94,13 @@ _trigger()
 int
 sandbox_entry(void *arg)
 {
+	/*
+	 * Parent call clone() with ROOT_PRIVILEGE so the child
+	 * inherit it, we need to drop root privilege immediately
+	 */
+	EUID__user();
+	EUID__assert_user();
+
 	int i;
 	char ch;
 
@@ -190,13 +198,16 @@ int
 write_map(pid_t pid, const char *map, const char *map_file)
 {
 	char *path = NULL;
+	int fd;
 
 	if (asprintf(&path, "/proc/%ld/%s", (long)pid, map_file) < 0)
 		DIE_PERROR("asprintf");
-	int fd = open(path, O_WRONLY);
-	if (fd < 0) DIE_PERROR("open");
-	if (write(fd, map, strlen(map)) < 0) DIE_PERROR("write");
-
+	ROOT_PRIVILEGE
+	{
+		fd = open(path, O_WRONLY);
+		if (fd < 0) DIE_PERROR("open");
+		if (write(fd, map, strlen(map)) < 0) DIE_PERROR("write");
+	}
 	close(fd);
 	free(path);
 	return 0;
@@ -216,11 +227,16 @@ write_gid_map(pid_t pid, const char *map)
 	int fd;
 
 	if (snprintf(setgroups_path, SETGROUPS_PATH_MAX, "/proc/%ld/setgroups",
-		     (long)pid) < 0)
+		     (long)pid) < 0) {
 		DIE_PERROR("snprintf");
-	fd = open(setgroups_path, O_WRONLY);
-	if (fd < 0) DIE_PERROR("open");
-	if (write(fd, "deny", 4) < 0) DIE_PERROR("write");
+	}
+
+	ROOT_PRIVILEGE
+	{
+		fd = open(setgroups_path, O_WRONLY);
+		if (fd < 0) DIE_PERROR("open");
+		if (write(fd, "deny", 4) < 0) DIE_PERROR("write");
+	}
 
 	close(fd);
 	return write_map(pid, map, "gid_map");
@@ -231,13 +247,13 @@ setup_userns_mapping(struct sandbox_t *sandbox, int child_pid)
 {
 	char *map = NULL;
 
-	if (asprintf(&map, "0 %d 1\n", sandbox->uid) < 0)
+	if (asprintf(&map, "0 0 1\n%d %d 1\n", sandbox->uid, sandbox->uid) < 0)
 		DIE_PERROR("asprintf");
 	if (write_uid_map(child_pid, map) < 0)
 		DIE_LOG_ERROR("write_uid_map: error");
 	free(map);
 
-	if (asprintf(&map, "0 %d 1\n", sandbox->gid) < 0)
+	if (asprintf(&map, "0 0 1\n%d %d 1\n", sandbox->gid, sandbox->gid) < 0)
 		DIE_PERROR("asprintf");
 	if (write_gid_map(child_pid, map) < 0)
 		DIE_LOG_ERROR("write_gid_map: error");
@@ -256,7 +272,8 @@ sandbox__init(struct sandbox_t *sandbox)
 
 	if (profile__interpret(sandbox, ACTION_UNSHARE)) return -1;
 
-	sandbox->clone_flags = CLONE_NEWUSER | CLONE_NEWNS;
+	sandbox->clone_flags = CLONE_NEWNS | SIGCHLD;
+	if (prof_dt->unshare_user) sandbox->clone_flags |= CLONE_NEWUSER;
 	if (prof_dt->unshare_pid) sandbox->clone_flags |= CLONE_NEWPID;
 	if (prof_dt->unshare_uts) sandbox->clone_flags |= CLONE_NEWUTS;
 	if (prof_dt->unshare_ipc) sandbox->clone_flags |= CLONE_NEWIPC;
@@ -272,8 +289,11 @@ sandbox__init(struct sandbox_t *sandbox)
 			   MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
 	if (child_stack == MAP_FAILED) DIE_PERROR("mmap");
 
-	child_pid = clone(sandbox_entry, child_stack + STACK_SIZE,
-			  sandbox->clone_flags | SIGCHLD, sandbox);
+	ROOT_PRIVILEGE
+	{
+		child_pid = clone(sandbox_entry, child_stack + STACK_SIZE,
+				  sandbox->clone_flags, sandbox);
+	}
 	if (child_pid < 0) DIE_PERROR("clone");
 	munmap(child_stack, STACK_SIZE);
 	prctl(PR_SET_PDEATHSIG,
@@ -283,7 +303,8 @@ sandbox__init(struct sandbox_t *sandbox)
 	sandbox->slave_pid = child_pid;
 
 	// map uid, gid in new child's user namespace
-	if (setup_userns_mapping(sandbox, child_pid) < 0)
+	if ((sandbox->clone_flags & CLONE_NEWUSER) &&
+	    setup_userns_mapping(sandbox, child_pid) < 0)
 		DIE_LOG_ERROR("setup_userns_mapping: error");
 	// done writing, signal child
 	_trigger();
@@ -470,7 +491,12 @@ command_interpret(struct profile_command_t *cmd,
 	argv1 = (argc > 1) ? argv[1] : NULL;
 	argv2 = (argc > 2) ? argv[2] : NULL;
 
-	if (strcmp(argv0, "unshare-pid") == 0) {
+	if (strcmp(argv0, "unshare-user") == 0) {
+		MAX_ARGC_GUARD(2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_UNSHARE);
+		if (boolean_value_parse(&prof_dt->unshare_user, 1, argv1))
+			SHORT_CMD_SYNTAX_ERROR;
+	} else if (strcmp(argv0, "unshare-pid") == 0) {
 		MAX_ARGC_GUARD(2);
 		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_UNSHARE);
 		if (boolean_value_parse(&prof_dt->unshare_pid, 1, argv1))
@@ -498,6 +524,8 @@ command_interpret(struct profile_command_t *cmd,
 	} else if (strcmp(argv0, "unshare-all") == 0) {
 		MAX_ARGC_GUARD(2);
 		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_UNSHARE);
+		if (boolean_value_parse(&prof_dt->unshare_user, 1, argv1))
+			SHORT_CMD_SYNTAX_ERROR;
 		if (boolean_value_parse(&prof_dt->unshare_pid, 1, argv1))
 			SHORT_CMD_SYNTAX_ERROR;
 		if (boolean_value_parse(&prof_dt->unshare_net, 1, argv1))

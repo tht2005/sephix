@@ -1,4 +1,5 @@
 #include "sephix/net.h"
+#include "euid.h"
 #include "sephix/sandbox.h"
 #include "util.h"
 
@@ -26,9 +27,16 @@ set_link_updown(struct nl_sock *sock, struct rtnl_link *link, int up)
 	link_change = rtnl_link_alloc();
 	if (link_change == NULL) DIE_PERROR("rtnl_link_change");
 
-	(up ? rtnl_link_set_flags : rtnl_link_unset_flags)(link_change, IFF_UP);
-	if ((err = rtnl_link_change(sock, link, link_change, 0)) < 0)
-		DIE_LOG_ERROR("rtnl_link_change: %s", nl_geterror(err));
+	if (up)
+		rtnl_link_set_flags(link_change, IFF_UP);
+	else
+		rtnl_link_unset_flags(link_change, IFF_UP);
+
+	ROOT_PRIVILEGE
+	{
+		if ((err = rtnl_link_change(sock, link, link_change, 0)) < 0)
+			DIE_LOG_ERROR("rtnl_link_change: %s", nl_geterror(err));
+	}
 
 	rtnl_link_put(link_change);
 	return 0;
