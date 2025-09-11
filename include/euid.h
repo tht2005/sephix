@@ -36,6 +36,9 @@ extern uid_t sephix_ruid;
 extern gid_t sephix_rgid;
 
 void
+EUID__give_up_root_privilege();
+
+void
 EUID__print();
 
 void

@@ -176,6 +176,12 @@ sandbox_entry(void *arg)
 		return -1;
 	}
 
+	/*
+	 * Before switch to user's process, give up root privilege
+	 */
+	EUID__give_up_root_privilege();
+	EUID__assert_user();
+
 	child_pid = fork();
 	if (child_pid < 0) {
 		PERROR("fork");

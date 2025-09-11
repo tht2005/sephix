@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 // clang-format off
 #define UID_UNSET ((uid_t)-1)
@@ -22,11 +23,33 @@ gid_t sephix_rgid = GID_UNSET;
 	} while (0)
 
 void
+EUID__give_up_root_privilege()
+{
+	EUID__GUARD;
+	if (setresuid(sephix_ruid, sephix_ruid, sephix_ruid) < 0) {
+		DIE_PERROR("setresuid");
+		exit(EXIT_FAILURE);
+	}
+	if (setresgid(sephix_rgid, sephix_rgid, sephix_rgid) < 0) {
+		DIE_PERROR("setresgid");
+		exit(EXIT_FAILURE);
+	}
+}
+
+void
 EUID__print()
 {
 	EUID__GUARD;
-	fprintf(stderr, "sephix_ruid = %d\n", sephix_ruid);
-	fprintf(stderr, "sephix_rgid = %d\n", sephix_rgid);
+	uid_t ruid, euid, suid;
+	gid_t rgid, egid, sgid;
+	if (getresuid(&ruid, &euid, &suid) < 0) {
+		DIE_PERROR("getresuid");
+	}
+	if (getresgid(&rgid, &egid, &sgid) < 0) {
+		DIE_PERROR("getresgid");
+	}
+	fprintf(stderr, "sephix_uid = %d %d %d\n", ruid, euid, suid);
+	fprintf(stderr, "sephix_gid = %d %d %d\n", rgid, egid, sgid);
 }
 
 void
