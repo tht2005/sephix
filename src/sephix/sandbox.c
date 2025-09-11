@@ -629,7 +629,7 @@ command_interpret(struct profile_command_t *cmd,
 						      access) < 0)
 				DIE_LOG_ERROR("landlock__add_path_rule_2");
 		}
-		globfree(&g_results);  // TODO: Move to out
+		globfree(&g_results);
 	} else if (strcmp(argv0, "seccomp.default") == 0) {
 		ARGC_GUARD(2, 2);
 		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_SECCOMP);
