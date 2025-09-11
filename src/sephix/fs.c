@@ -65,7 +65,8 @@ fs__create_public_metadata(struct sandbox_t *sandbox)
 	*clean_info = (struct clean_public_metadata_t){
 		.profile_filename = profile_filename,
 	};
-	on_exit(clean_public_metadata, clean_info);
+	if (on_exit(clean_public_metadata, clean_info))
+		DIE_LOG_ERROR("on_exit failed");
 
 	return 0;
 }
