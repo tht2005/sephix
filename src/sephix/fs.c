@@ -95,8 +95,11 @@ fs__chroot(struct sandbox_t *sandbox)
 {
 	EUID__assert_user();
 	// Move to sandboxed file system
-	if (mkdir2(sandbox->runtime_dir, "/mnt/.old_root", 0755))
-		DIE_PERROR("mkdir");
+	ROOT_PRIVILEGE
+	{
+		if (mkdir2(sandbox->runtime_dir, "/mnt/.old_root", 0755))
+			DIE_PERROR("mkdir");
+	}
 	if (chdir2(sandbox->runtime_dir, "/mnt") < 0)
 		DIE_PERROR("chdir");
 	ROOT_PRIVILEGE {

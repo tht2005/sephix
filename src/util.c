@@ -79,10 +79,7 @@ mkdir2(const char *prefix, const char *suffix, __mode_t mode)
 	if (asprintf(&path, "%s%s", prefix, suffix) < 0) {
 		return -1;
 	}
-	ROOT_PRIVILEGE
-	{
-		status = mkdir(path, mode);
-	}
+	status = mkdir(path, mode);
 	free(path);
 	return status;
 }

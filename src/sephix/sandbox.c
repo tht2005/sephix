@@ -575,10 +575,11 @@ command_interpret(struct profile_command_t *cmd,
 	} else if (strcmp(argv0, "mkdir") == 0) {
 		ARGC_GUARD(2, 2);
 		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_FS);
-		if (mkdir2(newroot_dir, argv1, 0755) < 0 && errno != EEXIST)
-			DIE_CMD_ERROR_0(cmd,
-					"can not create directory '%s': %s\n",
-					argv1, strerror(errno));
+		ROOT_PRIVILEGE
+		{
+			if (mkdir2(newroot_dir, argv1, 0755) < 0 && errno != EEXIST)
+				DIE_CMD_ERROR_0(cmd, "can not create directory '%s': %s\n", argv1, strerror(errno));
+		}
 	} else if (strcmp(argv0, "tmpfs") == 0) {
 		ARGC_GUARD(2, 3);
 		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_FS);
