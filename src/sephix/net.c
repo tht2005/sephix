@@ -1,8 +1,11 @@
 #include "sephix/net.h"
+#include "sephix/netctx.h"
 #include "euid.h"
 #include "sephix/sandbox.h"
 #include "util.h"
 
+#include <netlink/cache.h>
+#include <netlink/handlers.h>
 #include <linux/if_link.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
@@ -13,10 +16,52 @@
 #include <unistd.h>
 
 #include <netlink/netlink.h>
+#include <netlink/route/route.h>
 #include <netlink/route/addr.h>
 #include <netlink/route/link.h>
 #include <netlink/route/link/veth.h>
 #include <netlink/socket.h>
+
+struct netctx *
+netctx__create()
+{
+	struct netctx *ctx = (struct netctx *)malloc(sizeof(struct netctx));
+	if (ctx == NULL) DIE_PERROR("malloc");
+
+	ctx->sock = nl_socket_alloc();
+	if (ctx->sock == NULL) DIE_PERROR("nl_socket_alloc");
+	if (nl_connect(ctx->sock, NETLINK_ROUTE) < 0) DIE_PERROR("nl_connect");
+
+	if (rtnl_link_alloc_cache(ctx->sock, AF_UNSPEC, &ctx->link_cache) < 0)
+		DIE_PERROR("rtnl_link_alloc_cache");
+
+	if (rtnl_addr_alloc_cache(ctx->sock, &ctx->addr_cache) < 0)
+		DIE_PERROR("rtnl_addr_alloc_cache");
+
+	if (rtnl_route_alloc_cache(ctx->sock, AF_UNSPEC, 0, &ctx->route_cache) < 0)
+		DIE_PERROR("rtnl_route_alloc_cache");
+
+	return ctx;
+}
+void
+netctx__refill_cache(struct netctx *ctx)
+{
+	if (nl_cache_refill(ctx->sock, ctx->link_cache) < 0)
+		DIE_PERROR("nl_cache_refill");
+	if (nl_cache_refill(ctx->sock, ctx->addr_cache) < 0)
+		DIE_PERROR("nl_cache_refill");
+	if (nl_cache_refill(ctx->sock, ctx->route_cache) < 0)
+		DIE_PERROR("nl_cache_refill");
+}
+void
+netctx__free(struct netctx *ctx)
+{
+	nl_cache_free(ctx->link_cache);
+	nl_cache_free(ctx->addr_cache);
+	nl_cache_free(ctx->route_cache);
+	nl_socket_free(ctx->sock);
+	free(ctx);
+}
 
 int
 set_link_updown(struct nl_sock *sock, struct rtnl_link *link, int up)
