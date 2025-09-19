@@ -105,9 +105,16 @@ sandbox_entry(void *arg)
 	char ch;
 
 	pid_t child_pid;
+	int netns_fd;
 
 	struct sandbox_t *sandbox = (struct sandbox_t *)arg;
 	struct profile_data_t *prof_dt = sandbox->prof_dt;
+
+	sandbox->slave_ctx = netctx__create();
+
+	netns_fd = open("/proc/self/ns/net", O_RDONLY);
+	if (netns_fd < 0) DIE_PERROR("open");
+	sandbox->slave_netns_fd = netns_fd;
 
 	// wait parent map uid, gid on the new user namespace
 	if (_ack() < 0) {
@@ -305,7 +312,6 @@ sandbox__init(struct sandbox_t *sandbox)
 	prctl(PR_SET_PDEATHSIG,
 	      SIGKILL);	 // after parent die, send SIGKILL to child
 
-	// store child's pid
 	sandbox->slave_pid = child_pid;
 
 	// map uid, gid in new child's user namespace
@@ -577,8 +583,12 @@ command_interpret(struct profile_command_t *cmd,
 		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_FS);
 		ROOT_PRIVILEGE
 		{
-			if (mkdir2(newroot_dir, argv1, 0755) < 0 && errno != EEXIST)
-				DIE_CMD_ERROR_0(cmd, "can not create directory '%s': %s\n", argv1, strerror(errno));
+			if (mkdir2(newroot_dir, argv1, 0755) < 0 &&
+			    errno != EEXIST)
+				DIE_CMD_ERROR_0(
+					cmd,
+					"can not create directory '%s': %s\n",
+					argv1, strerror(errno));
 		}
 	} else if (strcmp(argv0, "tmpfs") == 0) {
 		ARGC_GUARD(2, 3);
@@ -706,7 +716,7 @@ command_interpret(struct profile_command_t *cmd,
 		MIN_ARGC_GUARD(2);
 		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_NET);
 		for (i = 1; i < argc; ++i) {
-			if (net__set_link_updown(argv[i], 1) < 0)
+			if (net__set_if_updown(sandbox, argv[i], 1) < 0)
 				DIE_CMD_ERROR_0(cmd,
 						"can't set interface %s up",
 						argv[i]);
@@ -715,11 +725,24 @@ command_interpret(struct profile_command_t *cmd,
 		ARGC_GUARD(2, 2);
 		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_NET);
 		for (i = 1; i < argc; ++i) {
-			if (net__set_link_updown(argv[i], 0) < 0)
+			if (net__set_if_updown(sandbox, argv[i], 0) < 0)
 				DIE_CMD_ERROR_0(cmd,
 						"can't set interface %s down",
 						argv[i]);
 		}
+	} else if (strcmp(argv0, "link") == 0) {
+		MIN_ARGC_GUARD(2);
+		ACTION_FLAGS_GUARD(out, actions_flags, ACTION_NET);
+		char *ip = NULL;
+		int default_gw = 0;
+		for (i = 2; i < argc; ++i) {
+			if (strcmp(argv[i], "default-gw") == 0) {
+				default_gw = 1;
+			} else if (strncmp(argv[i], "ip=", 3) == 0) {
+				ip = argv[i] + 3;
+			}
+		}
+		net__link_master_if(sandbox, argv1, ip, default_gw);
 	} else {
 		DIE_CMD_ERROR_0(cmd, "command '%s' do not exists", argv0);
 	}

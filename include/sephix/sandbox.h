@@ -2,19 +2,27 @@
 #define __SEPHIX__SANDBOX_H
 
 #include "profile.h"
+#include "sephix/netctx.h"
+
 #include <sys/types.h>
 
 struct sandbox_t {
+	struct netctx *master_ctx;
+	struct netctx *slave_ctx;
+
 	int clone_flags;
 
 	pid_t master_pid;
 	pid_t slave_pid;
 
-	gid_t gid;
 	uid_t uid;
+	gid_t gid;
 
 	struct profile_t *profile;
 	struct profile_data_t *prof_dt;
+
+	int master_netns_fd;
+	int slave_netns_fd;
 
 	int ruleset_fd;	 // landlock
 
