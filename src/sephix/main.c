@@ -3,6 +3,7 @@
 #include "config.h"
 #include "confuse.h"
 #include "euid.h"
+#include "sephix/net.h"
 #include "sephix/sandbox.h"
 #include "sephix_build_config.h"
 #include "util.h"
@@ -68,6 +69,8 @@ main(int argc, char **argv)
 
 	int i, j;
 
+	int netns_fd;
+
 	char *profile_name = NULL;
 	char *runtime_dir = NULL;
 
@@ -83,6 +86,9 @@ main(int argc, char **argv)
 
 	static struct profile_t profile = {0};
 	static struct profile_data_t *prof_dt;
+
+	netns_fd = open("/proc/self/ns/net", O_RDONLY);
+	if (netns_fd < 0) DIE_PERROR("open");
 
 	prof_dt = profile_data_t__create();
 	if (prof_dt == NULL) DIE_LOG_ERROR("profile_data_t__create");
@@ -176,12 +182,14 @@ exec:
 	}
 
 	struct sandbox_t sandbox = {
+		.master_ctx = netctx__create(),
 		.master_pid = getpid(),
 		.gid = getgid(),
 		.uid = getuid(),
 		.name = NULL,
 		.profile = &profile,
 		.prof_dt = prof_dt,
+		.master_netns_fd = netns_fd,
 		.runtime_dir = runtime_dir,
 		.exec_argc = exec_argc,
 		.exec_argv = exec_argv,
